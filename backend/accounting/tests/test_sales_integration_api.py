@@ -16,8 +16,8 @@ class SalesIntegrationApiTests(APITestCase):
         self.company = Company.objects.create(name="Company X")
         self.user = User.objects.create_user(username="seller", password="pass12345", company=self.company)
 
-        role = Role.objects.create(company=self.company, name="Seller")
-        UserRole.objects.create(user=self.user, role=role)
+        role, _ = Role.objects.get_or_create(company=self.company, name="Seller")
+        UserRole.objects.get_or_create(user=self.user, role=role)
         for code in ["invoices.*", "catalog.edit", "catalog.view", "customers.create", "customers.view"]:
             permission = Permission.objects.create(code=code, name=code)
             RolePermission.objects.create(role=role, permission=permission)

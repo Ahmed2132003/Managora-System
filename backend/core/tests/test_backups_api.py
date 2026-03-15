@@ -19,8 +19,8 @@ class BackupApiTests(APITestCase):
             password="pass12345",
             company=self.company,
         )
-        manager_role = Role.objects.create(company=self.company, name="Manager")
-        UserRole.objects.create(user=self.manager, role=manager_role)
+        manager_role, _ = Role.objects.get_or_create(company=self.company, name="Manager")
+        UserRole.objects.get_or_create(user=self.manager, role=manager_role)
 
         self.employee = User.objects.create_user(
             username="employee",

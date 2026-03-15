@@ -16,9 +16,9 @@ class RBACModelTests(TestCase):
             code="users.view",
             name="View users",
         )
-        role = Role.objects.create(company=company, name="HR")
-        RolePermission.objects.create(role=role, permission=permission)
-        UserRole.objects.create(user=user, role=role)
+        role, _ = Role.objects.get_or_create(company=company, name="HR")
+        RolePermission.objects.get_or_create(role=role, permission=permission)
+        UserRole.objects.get_or_create(user=user, role=role)
 
         self.assertEqual(list(user.roles.all()), [role])
         permissions = Permission.objects.filter(roles__users=user).values_list(

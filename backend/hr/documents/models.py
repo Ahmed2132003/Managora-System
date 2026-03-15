@@ -2,6 +2,7 @@
 Employee document models.
 """
 from django.conf import settings
+from django.db import models
 
 from hr.models.base import BaseModel
 

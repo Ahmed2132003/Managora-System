@@ -43,12 +43,12 @@ class EmployeeDocumentApiTests(APITestCase):
             company=self.c1,
         )
         
-        self.hr_role = Role.objects.create(company=self.c1, name="HR")
-        self.manager_role = Role.objects.create(company=self.c1, name="Manager")
-        self.other_role = Role.objects.create(company=self.c2, name="HR")
-        UserRole.objects.create(user=self.hr_user, role=self.hr_role)
-        UserRole.objects.create(user=self.manager_user, role=self.manager_role)
-        UserRole.objects.create(user=self.other_user, role=self.other_role)
+        self.hr_role, _ = Role.objects.get_or_create(company=self.c1, name="HR")
+        self.manager_role, _ = Role.objects.get_or_create(company=self.c1, name="Manager")
+        self.other_role, _ = Role.objects.get_or_create(company=self.c2, name="HR")
+        UserRole.objects.get_or_create(user=self.hr_user, role=self.hr_role)
+        UserRole.objects.get_or_create(user=self.manager_user, role=self.manager_role)
+        UserRole.objects.get_or_create(user=self.other_user, role=self.other_role)
 
         permissions = {
             code: Permission.objects.create(code=code, name=code)

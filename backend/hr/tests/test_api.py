@@ -30,12 +30,12 @@ class HrApiTests(APITestCase):
             company=self.c1,
         )
 
-        self.hr_role = Role.objects.create(company=self.c1, name="HR")
-        self.manager_role = Role.objects.create(company=self.c1, name="Manager")
-        self.accountant_role = Role.objects.create(company=self.c1, name="Accountant")
-        UserRole.objects.create(user=self.hr, role=self.hr_role)
-        UserRole.objects.create(user=self.manager, role=self.manager_role)
-        UserRole.objects.create(user=self.accountant, role=self.accountant_role)
+        self.hr_role, _ = Role.objects.get_or_create(company=self.c1, name="HR")
+        self.manager_role, _ = Role.objects.get_or_create(company=self.c1, name="Manager")
+        self.accountant_role, _ = Role.objects.get_or_create(company=self.c1, name="Accountant")
+        UserRole.objects.get_or_create(user=self.hr, role=self.hr_role)
+        UserRole.objects.get_or_create(user=self.manager, role=self.manager_role)
+        UserRole.objects.get_or_create(user=self.accountant, role=self.accountant_role)
 
         self.permissions = {
             code: Permission.objects.create(code=code, name=code)

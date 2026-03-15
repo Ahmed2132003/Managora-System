@@ -20,12 +20,12 @@ class UsersPermissionsApiTests(APITestCase):
         self.other_company_user = User.objects.create_user(username="x", password="pass12345", company=self.c2)
 
         # roles
-        self.manager_role = Role.objects.create(company=self.c1, name="Manager")
-        self.hr_role = Role.objects.create(company=self.c1, name="HR")
-        self.accountant_role = Role.objects.create(company=self.c1, name="Accountant")
-        self.employee_role = Role.objects.create(company=self.c1, name="Employee")
-        UserRole.objects.create(user=self.manager, role=self.manager_role)
-        UserRole.objects.create(user=self.hr, role=self.hr_role)
+        self.manager_role, _ = Role.objects.get_or_create(company=self.c1, name="Manager")
+        self.hr_role, _ = Role.objects.get_or_create(company=self.c1, name="HR")
+        self.accountant_role, _ = Role.objects.get_or_create(company=self.c1, name="Accountant")
+        self.employee_role, _ = Role.objects.get_or_create(company=self.c1, name="Employee")
+        UserRole.objects.get_or_create(user=self.manager, role=self.manager_role)
+        UserRole.objects.get_or_create(user=self.hr, role=self.hr_role)
         
         # permissions rows
         self.p_view = Permission.objects.create(code="users.view", name="View users")
@@ -110,7 +110,7 @@ class UsersPermissionsApiTests(APITestCase):
 
     def test_assign_roles_rejects_other_company(self):
         self.auth("manager")
-        other_role = Role.objects.create(company=self.c2, name="Other")
+        other_role, _ = Role.objects.get_or_create(company=self.c2, name="Other")
         url = reverse("user-assign-roles", kwargs={"pk": self.hr.id})
         res = self.client.post(url, {"role_ids": [other_role.id]}, format="json")
         self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)

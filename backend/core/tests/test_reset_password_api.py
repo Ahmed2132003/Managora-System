@@ -18,10 +18,10 @@ class ResetPasswordApiTests(APITestCase):
             username="hr", password="pass12345", company=self.company
         )
 
-        self.manager_role = Role.objects.create(company=self.company, name="Manager")
-        self.hr_role = Role.objects.create(company=self.company, name="HR")
-        UserRole.objects.create(user=self.manager, role=self.manager_role)
-        UserRole.objects.create(user=self.hr, role=self.hr_role)
+        self.manager_role, _ = Role.objects.get_or_create(company=self.company, name="Manager")
+        self.hr_role, _ = Role.objects.get_or_create(company=self.company, name="HR")
+        UserRole.objects.get_or_create(user=self.manager, role=self.manager_role)
+        UserRole.objects.get_or_create(user=self.hr, role=self.hr_role)
 
         self.reset_perm = Permission.objects.create(
             code="users.reset_password", name="Reset user passwords"

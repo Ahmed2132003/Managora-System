@@ -28,13 +28,13 @@ class CopilotApiTests(APITestCase):
             company=self.company,
         )
 
-        self.role = Role.objects.create(company=self.company, name="HR")
+        self.role, _ = Role.objects.get_or_create(company=self.company, name="HR")
         self.permission = Permission.objects.create(
             code="copilot.attendance_report",
             name="Run copilot attendance report",
         )
         RolePermission.objects.create(role=self.role, permission=self.permission)
-        UserRole.objects.create(user=self.user, role=self.role)
+        UserRole.objects.get_or_create(user=self.user, role=self.role)
 
         today = timezone.localdate()
         department = Department.objects.create(company=self.company, name="Sales")

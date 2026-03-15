@@ -19,8 +19,10 @@ class MessagingApiTests(APITestCase):
         self.user1 = User.objects.create_user(username="u1", password="pass12345", company=self.company)
         self.user2 = User.objects.create_user(username="u2", password="pass12345", company=self.company)
         self.user3 = User.objects.create_user(username="u3", password="pass12345", company=self.company)
-        manager_role = Role.objects.create(company=self.company, name="Manager", slug="manager")
-        UserRole.objects.create(user=self.user1, role=manager_role)
+        manager_role, _ = Role.objects.get_or_create(
+            company=self.company, name="Manager", defaults={"slug": "manager"}
+        )
+        UserRole.objects.get_or_create(user=self.user1, role=manager_role)
 
     def _login(self, username: str):
         response = self.client.post(

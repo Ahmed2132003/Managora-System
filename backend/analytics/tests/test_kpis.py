@@ -175,8 +175,8 @@ class AnalyticsPermissionsTests(APITestCase):
             password="pass12345",
             company=self.company,
         )
-        self.role = Role.objects.create(company=self.company, name="Employee")
-        UserRole.objects.create(user=self.user, role=self.role)
+        self.role, _ = Role.objects.get_or_create(company=self.company, name="Employee")
+        UserRole.objects.get_or_create(user=self.user, role=self.role)
 
     def auth(self, username):
         url = reverse("token_obtain_pair")

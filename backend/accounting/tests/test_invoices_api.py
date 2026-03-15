@@ -22,8 +22,8 @@ class InvoiceApiTests(APITestCase):
             company=self.company,
         )
 
-        self.accountant_role = Role.objects.create(company=self.company, name="Accountant")
-        UserRole.objects.create(user=self.accountant, role=self.accountant_role)
+        self.accountant_role, _ = Role.objects.get_or_create(company=self.company, name="Accountant")
+        UserRole.objects.get_or_create(user=self.accountant, role=self.accountant_role)
 
         permission = Permission.objects.create(code="invoices.*", name="invoices.*")
         RolePermission.objects.create(role=self.accountant_role, permission=permission)

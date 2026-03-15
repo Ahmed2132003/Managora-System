@@ -25,10 +25,10 @@ class LeaveApiTests(APITestCase):
             username="employee", password="pass12345", company=self.company
         )
 
-        self.hr_role = Role.objects.create(company=self.company, name="HR")
-        self.manager_role = Role.objects.create(company=self.company, name="Manager")
-        UserRole.objects.create(user=self.hr_user, role=self.hr_role)
-        UserRole.objects.create(user=self.manager_user, role=self.manager_role)
+        self.hr_role, _ = Role.objects.get_or_create(company=self.company, name="HR")
+        self.manager_role, _ = Role.objects.get_or_create(company=self.company, name="Manager")
+        UserRole.objects.get_or_create(user=self.hr_user, role=self.hr_role)
+        UserRole.objects.get_or_create(user=self.manager_user, role=self.manager_role)
 
         self.permissions = {
             code: Permission.objects.create(code=code, name=code)

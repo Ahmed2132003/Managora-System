@@ -132,14 +132,14 @@ class AttendancePhase4Part5ApiTests(APITestCase):
             username="employee", password="pass123", company=self.company
         )
 
-        self.hr_role = Role.objects.create(company=self.company, name="HR")
+        self.hr_role, _ = Role.objects.get_or_create(company=self.company, name="HR")
         self.attendance_permission = Permission.objects.create(
             code="attendance.*", name="attendance.*"
         )
         RolePermission.objects.create(
             role=self.hr_role, permission=self.attendance_permission
         )
-        UserRole.objects.create(user=self.hr_user, role=self.hr_role)
+        UserRole.objects.get_or_create(user=self.hr_user, role=self.hr_role)
 
         self.employee = Employee.objects.create(
             company=self.company,

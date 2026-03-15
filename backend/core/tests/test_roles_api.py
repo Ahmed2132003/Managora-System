@@ -27,13 +27,13 @@ class RolesApiTests(APITestCase):
             company=self.company,
         )
 
-        self.manager_role = Role.objects.create(company=self.company, name="Manager")
-        self.hr_role = Role.objects.create(company=self.company, name="HR")
-        self.accountant_role = Role.objects.create(company=self.company, name="Accountant")
-        self.employee_role = Role.objects.create(company=self.company, name="Employee")
-        UserRole.objects.create(user=self.manager, role=self.manager_role)
-        UserRole.objects.create(user=self.hr, role=self.hr_role)
-        UserRole.objects.create(user=self.accountant, role=self.accountant_role)
+        self.manager_role, _ = Role.objects.get_or_create(company=self.company, name="Manager")
+        self.hr_role, _ = Role.objects.get_or_create(company=self.company, name="HR")
+        self.accountant_role, _ = Role.objects.get_or_create(company=self.company, name="Accountant")
+        self.employee_role, _ = Role.objects.get_or_create(company=self.company, name="Employee")
+        UserRole.objects.get_or_create(user=self.manager, role=self.manager_role)
+        UserRole.objects.get_or_create(user=self.hr, role=self.hr_role)
+        UserRole.objects.get_or_create(user=self.accountant, role=self.accountant_role)
 
         self.permission = Permission.objects.create(
             code="users.view",

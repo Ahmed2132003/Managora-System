@@ -16,9 +16,9 @@ class AuditLogTests(APITestCase):
             password="pass12345",
             company=self.company,
         )
-        self.manager_role = Role.objects.create(company=self.company, name="Manager")
-        self.employee_role = Role.objects.create(company=self.company, name="Employee")
-        UserRole.objects.create(user=self.manager, role=self.manager_role)
+        self.manager_role, _ = Role.objects.get_or_create(company=self.company, name="Manager")
+        self.employee_role, _ = Role.objects.get_or_create(company=self.company, name="Employee")
+        UserRole.objects.get_or_create(user=self.manager, role=self.manager_role)
 
         permissions = [
             Permission.objects.create(code="users.create", name="Create users"),

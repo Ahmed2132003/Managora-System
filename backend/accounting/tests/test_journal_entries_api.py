@@ -25,10 +25,10 @@ class JournalEntryApiTests(APITestCase):
             company=self.company_a,
         )
 
-        self.accountant_role = Role.objects.create(company=self.company_a, name="Accountant")
-        self.hr_role = Role.objects.create(company=self.company_a, name="HR")
-        UserRole.objects.create(user=self.accountant, role=self.accountant_role)
-        UserRole.objects.create(user=self.hr, role=self.hr_role)
+        self.accountant_role, _ = Role.objects.get_or_create(company=self.company_a, name="Accountant")
+        self.hr_role, _ = Role.objects.get_or_create(company=self.company_a, name="HR")
+        UserRole.objects.get_or_create(user=self.accountant, role=self.accountant_role)
+        UserRole.objects.get_or_create(user=self.hr, role=self.hr_role)
 
         self.permissions = {
             code: Permission.objects.create(code=code, name=code)

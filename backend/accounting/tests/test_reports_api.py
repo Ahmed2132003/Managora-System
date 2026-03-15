@@ -29,10 +29,10 @@ class ReportsApiTests(APITestCase):
             company=self.company,
         )
 
-        accountant_role = Role.objects.create(company=self.company, name="Accountant")
-        hr_role = Role.objects.create(company=self.company, name="HR")
-        UserRole.objects.create(user=self.accountant, role=accountant_role)
-        UserRole.objects.create(user=self.hr, role=hr_role)
+        accountant_role, _ = Role.objects.get_or_create(company=self.company, name="Accountant")
+        hr_role, _ = Role.objects.get_or_create(company=self.company, name="HR")
+        UserRole.objects.get_or_create(user=self.accountant, role=accountant_role)
+        UserRole.objects.get_or_create(user=self.hr, role=hr_role)
 
         permission = Permission.objects.create(code="accounting.reports.view", name="View reports")
         RolePermission.objects.create(role=accountant_role, permission=permission)

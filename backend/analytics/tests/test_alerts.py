@@ -75,8 +75,8 @@ class AlertAPITests(APITestCase):
             password="pass12345",
             company=self.company,
         )
-        self.role = Role.objects.create(company=self.company, name="Alerts Viewer")
-        UserRole.objects.create(user=self.user, role=self.role)
+        self.role, _ = Role.objects.get_or_create(company=self.company, name="Alerts Viewer")
+        UserRole.objects.get_or_create(user=self.user, role=self.role)
 
         self.permission_view = Permission.objects.create(
             code="analytics.alerts.view", name="View Alerts"
