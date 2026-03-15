@@ -82,13 +82,14 @@ WSGI_APPLICATION = "config.wsgi.application"
 ASGI_APPLICATION = "config.asgi.application"
 
 # Database (Postgres in docker)
+DEFAULT_POSTGRES_HOST = "db" if Path("/.dockerenv").exists() else "localhost"
 DATABASES = {
     "default": {
         "ENGINE": "django.db.backends.postgresql",
         "NAME": os.getenv("POSTGRES_DB", "app"),
         "USER": os.getenv("POSTGRES_USER", "app"),
         "PASSWORD": os.getenv("POSTGRES_PASSWORD", "app"),
-        "HOST": os.getenv("POSTGRES_HOST", "db"),
+        "HOST": os.getenv("POSTGRES_HOST", DEFAULT_POSTGRES_HOST),        
         "PORT": os.getenv("POSTGRES_PORT", "5432"),
     }
 }
