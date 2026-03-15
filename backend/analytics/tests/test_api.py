@@ -21,8 +21,8 @@ class AnalyticsAPITests(APITestCase):
             password="pass12345",
             company=self.company,
         )
-        self.role = Role.objects.create(company=self.company, name="Analytics")
-        UserRole.objects.create(user=self.user, role=self.role)
+        self.role, _ = Role.objects.get_or_create(company=self.company, name="Analytics")
+        UserRole.objects.get_or_create(user=self.user, role=self.role)
 
         self.permission_finance = Permission.objects.create(
             code="analytics.view_finance", name="View Finance Analytics"
@@ -306,8 +306,8 @@ class AnalyticsDashboardPermissionTests(APITestCase):
             password="pass12345",
             company=self.company,
         )
-        self.role = Role.objects.create(company=self.company, name="CEO")
-        UserRole.objects.create(user=self.user, role=self.role)
+        self.role, _ = Role.objects.get_or_create(company=self.company, name="CEO")
+        UserRole.objects.get_or_create(user=self.user, role=self.role)
 
     def auth(self):
         url = reverse("token_obtain_pair")

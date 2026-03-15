@@ -21,12 +21,12 @@ class CashForecastAPITests(APITestCase):
             password="pass12345",
             company=self.company,
         )
-        role = Role.objects.create(company=self.company, name="Finance")
+        role, _ = Role.objects.get_or_create(company=self.company, name="Finance")
         permission = Permission.objects.create(
             code="analytics.view_finance", name="View Finance Analytics"
         )
         RolePermission.objects.create(role=role, permission=permission)
-        UserRole.objects.create(user=self.user, role=role)
+        UserRole.objects.get_or_create(user=self.user, role=role)
 
         self.cash_account = Account.objects.create(
             company=self.company,

@@ -21,7 +21,7 @@ class AuditTrailSignalTests(TestCase):
 
     def test_audit_log_created_for_role_update(self):
         set_audit_context(user=self.user, ip_address="127.0.0.1", user_agent="pytest")
-        role = Role.objects.create(company=self.company, name="Ops")
+        role, _ = Role.objects.get_or_create(company=self.company, name="Ops")
 
         create_log = AuditLog.objects.filter(action="core.role.create").first()
         self.assertIsNotNone(create_log)

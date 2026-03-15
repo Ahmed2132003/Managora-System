@@ -20,8 +20,8 @@ class PaymentApiTests(APITestCase):
             company=self.company,
         )
 
-        role = Role.objects.create(company=self.company, name="Accountant")
-        UserRole.objects.create(user=self.accountant, role=role)
+        role, _ = Role.objects.get_or_create(company=self.company, name="Accountant")
+        UserRole.objects.get_or_create(user=self.accountant, role=role)
         permission = Permission.objects.create(code="payments.*", name="payments.*")
         RolePermission.objects.create(role=role, permission=permission)
 
