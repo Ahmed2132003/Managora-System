@@ -35,8 +35,8 @@ class ReportsApiTests(APITestCase):
         UserRole.objects.get_or_create(user=self.hr, role=hr_role)
 
         permission = Permission.objects.create(code="accounting.reports.view", name="View reports")
-        RolePermission.objects.create(role=accountant_role, permission=permission)
-
+        RolePermission.objects.get_or_create(role=accountant_role, permission=permission)
+        
         self.cash = Account.objects.create(
             company=self.company,
             code="1000",

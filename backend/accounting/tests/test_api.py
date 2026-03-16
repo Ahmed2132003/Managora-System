@@ -37,10 +37,10 @@ class AccountingApiTests(APITestCase):
                 "accounting.manage_coa",
             ]
         }
-        RolePermission.objects.create(
+        RolePermission.objects.get_or_create(            
             role=self.manager_role, permission=self.permissions["accounting.view"]
         )
-        RolePermission.objects.create(
+        RolePermission.objects.get_or_create(            
             role=self.manager_role, permission=self.permissions["accounting.manage_coa"]
         )
 

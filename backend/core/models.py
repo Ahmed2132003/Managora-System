@@ -176,6 +176,10 @@ class RolePermission(models.Model):
     def __str__(self):
         return f"{self.role.name} -> {self.permission.code}"
 
+    @classmethod
+    def assign(cls, *, role, permission):
+        """Idempotently assign a permission to a role."""
+        return cls.objects.get_or_create(role=role, permission=permission)
 class UserManager(BaseUserManager):
     use_in_migrations = True
 

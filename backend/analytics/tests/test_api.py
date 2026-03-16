@@ -33,10 +33,10 @@ class AnalyticsAPITests(APITestCase):
         self.permission_ceo = Permission.objects.create(
             code="analytics.view_ceo", name="View CEO Analytics"
         )
-        RolePermission.objects.create(role=self.role, permission=self.permission_finance)
-        RolePermission.objects.create(role=self.role, permission=self.permission_hr)
-        RolePermission.objects.create(role=self.role, permission=self.permission_ceo)
-
+        RolePermission.objects.get_or_create(role=self.role, permission=self.permission_finance)
+        RolePermission.objects.get_or_create(role=self.role, permission=self.permission_hr)
+        RolePermission.objects.get_or_create(role=self.role, permission=self.permission_ceo)
+        
         KPIDefinition.objects.create(
             company=self.company,
             key="expenses_daily",
@@ -270,8 +270,8 @@ class AnalyticsAPITests(APITestCase):
         export_permission = Permission.objects.create(
             code="export.analytics", name="Export analytics"
         )
-        RolePermission.objects.create(role=self.role, permission=export_permission)
-
+        RolePermission.objects.get_or_create(role=self.role, permission=export_permission)
+        
         today = timezone.localdate()
         KPIFactDaily.objects.create(
             company=self.company,
@@ -326,7 +326,7 @@ class AnalyticsDashboardPermissionTests(APITestCase):
         permission = Permission.objects.create(
             code="analytics.view_ceo", name="View CEO Analytics"
         )
-        RolePermission.objects.create(role=self.role, permission=permission)
-
+        RolePermission.objects.get_or_create(role=self.role, permission=permission)
+        
         res = self.client.get(url)
         self.assertEqual(res.status_code, status.HTTP_200_OK)

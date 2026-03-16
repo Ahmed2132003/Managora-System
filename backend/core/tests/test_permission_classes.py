@@ -48,8 +48,8 @@ class PermissionClassTests(TestCase):
             code="users.create",
             name="Create users",
         )
-        RolePermission.objects.create(role=self.manager_role, permission=self.permission)
-
+        RolePermission.objects.get_or_create(role=self.manager_role, permission=self.permission)
+        
     def test_manager_can_create(self):
         request = self.factory.post("/api/dummy/")
         force_authenticate(request, user=self.manager)

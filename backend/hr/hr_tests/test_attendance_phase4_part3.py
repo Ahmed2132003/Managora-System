@@ -30,7 +30,7 @@ class AttendancePhase4Part3ApiTests(APITestCase):
             code="attendance.*",
             defaults={"name": "attendance.*"},
         )        
-        RolePermission.objects.create(
+        RolePermission.objects.get_or_create(            
             role=self.hr_role, permission=self.attendance_permission
         )
         UserRole.objects.get_or_create(user=self.hr_user, role=self.hr_role)

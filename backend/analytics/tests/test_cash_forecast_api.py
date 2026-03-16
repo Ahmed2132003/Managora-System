@@ -25,7 +25,7 @@ class CashForecastAPITests(APITestCase):
         permission = Permission.objects.create(
             code="analytics.view_finance", name="View Finance Analytics"
         )
-        RolePermission.objects.create(role=role, permission=permission)
+        RolePermission.objects.get_or_create(role=role, permission=permission)        
         UserRole.objects.get_or_create(user=self.user, role=role)
 
         self.cash_account = Account.objects.create(

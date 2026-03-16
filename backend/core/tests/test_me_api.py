@@ -28,7 +28,7 @@ class MeApiTests(APITestCase):
             name="View users",
         )
         role, _ = Role.objects.get_or_create(company=self.company, name="HR")
-        RolePermission.objects.create(role=role, permission=permission)
+        RolePermission.objects.get_or_create(role=role, permission=permission)        
         UserRole.objects.get_or_create(user=self.user, role=role)
 
         login_url = reverse("token_obtain_pair")

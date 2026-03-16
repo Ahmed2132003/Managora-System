@@ -195,6 +195,6 @@ class AnalyticsPermissionsTests(APITestCase):
         permission = Permission.objects.create(
             code="analytics.view_hr", name="View HR Analytics"
         )
-        RolePermission.objects.create(role=self.role, permission=permission)
+        RolePermission.objects.get_or_create(role=self.role, permission=permission)        
         res = self.client.get(url)
         self.assertEqual(res.status_code, status.HTTP_200_OK)

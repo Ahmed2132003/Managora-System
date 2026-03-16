@@ -63,22 +63,22 @@ class EmployeeDocumentApiTests(APITestCase):
                 "hr.documents.delete",
             ]
         }        
-        RolePermission.objects.create(
+        RolePermission.objects.get_or_create(            
             role=self.hr_role, permission=permissions["hr.employees.edit"]
         )
-        RolePermission.objects.create(
+        RolePermission.objects.get_or_create(            
             role=self.hr_role, permission=permissions["hr.documents.create"]
         )
-        RolePermission.objects.create(
+        RolePermission.objects.get_or_create(            
             role=self.hr_role, permission=permissions["hr.documents.delete"]
         )
-        RolePermission.objects.create(
+        RolePermission.objects.get_or_create(            
             role=self.hr_role, permission=permissions["hr.documents.view"]
         )
-        RolePermission.objects.create(
+        RolePermission.objects.get_or_create(            
             role=self.manager_role, permission=permissions["hr.employees.view"]
         )
-        RolePermission.objects.create(
+        RolePermission.objects.get_or_create(            
             role=self.other_role, permission=permissions["hr.documents.view"]
         )
 

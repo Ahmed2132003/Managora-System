@@ -32,16 +32,16 @@ class ExpenseApiTests(APITestCase):
             code: Permission.objects.create(code=code, name=code)
             for code in ["expenses.view", "expenses.create", "expenses.approve"]
         }
-        RolePermission.objects.create(
+        RolePermission.objects.get_or_create(            
             role=self.accountant_role, permission=self.permissions["expenses.view"]
         )
-        RolePermission.objects.create(
+        RolePermission.objects.get_or_create(            
             role=self.accountant_role, permission=self.permissions["expenses.create"]
         )
-        RolePermission.objects.create(
+        RolePermission.objects.get_or_create(            
             role=self.accountant_role, permission=self.permissions["expenses.approve"]
         )
-        RolePermission.objects.create(
+        RolePermission.objects.get_or_create(            
             role=self.employee_role, permission=self.permissions["expenses.create"]
         )
 

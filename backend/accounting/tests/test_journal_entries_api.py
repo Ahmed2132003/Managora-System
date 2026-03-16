@@ -37,10 +37,10 @@ class JournalEntryApiTests(APITestCase):
                 "accounting.journal.post",
             ]
         }
-        RolePermission.objects.create(
+        RolePermission.objects.get_or_create(            
             role=self.accountant_role, permission=self.permissions["accounting.journal.view"]
         )
-        RolePermission.objects.create(
+        RolePermission.objects.get_or_create(            
             role=self.accountant_role, permission=self.permissions["accounting.journal.post"]
         )
 

@@ -84,9 +84,9 @@ class AlertAPITests(APITestCase):
         self.permission_manage = Permission.objects.create(
             code="analytics.alerts.manage", name="Manage Alerts"
         )
-        RolePermission.objects.create(role=self.role, permission=self.permission_view)
-        RolePermission.objects.create(role=self.role, permission=self.permission_manage)
-
+        RolePermission.objects.get_or_create(role=self.role, permission=self.permission_view)
+        RolePermission.objects.get_or_create(role=self.role, permission=self.permission_manage)
+        
         self.rule = AlertRule.objects.create(
             company=self.company,
             key="expense_spike",

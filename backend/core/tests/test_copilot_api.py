@@ -33,7 +33,7 @@ class CopilotApiTests(APITestCase):
             code="copilot.attendance_report",
             name="Run copilot attendance report",
         )
-        RolePermission.objects.create(role=self.role, permission=self.permission)
+        RolePermission.objects.get_or_create(role=self.role, permission=self.permission)        
         UserRole.objects.get_or_create(user=self.user, role=self.role)
 
         today = timezone.localdate()

@@ -34,15 +34,15 @@ class UsersPermissionsApiTests(APITestCase):
         self.p_delete = Permission.objects.create(code="users.delete", name="Delete users")
 
         # manager has all
-        RolePermission.objects.create(role=self.manager_role, permission=self.p_view)
-        RolePermission.objects.create(role=self.manager_role, permission=self.p_create)
-        RolePermission.objects.create(role=self.manager_role, permission=self.p_edit)
-        RolePermission.objects.create(role=self.manager_role, permission=self.p_delete)
-
-        # HR has view + create
-        RolePermission.objects.create(role=self.hr_role, permission=self.p_view)
-        RolePermission.objects.create(role=self.hr_role, permission=self.p_create)
+        RolePermission.objects.get_or_create(role=self.manager_role, permission=self.p_view)
+        RolePermission.objects.get_or_create(role=self.manager_role, permission=self.p_create)
+        RolePermission.objects.get_or_create(role=self.manager_role, permission=self.p_edit)
+        RolePermission.objects.get_or_create(role=self.manager_role, permission=self.p_delete)
         
+        # HR has view + create
+        RolePermission.objects.get_or_create(role=self.hr_role, permission=self.p_view)
+        RolePermission.objects.get_or_create(role=self.hr_role, permission=self.p_create)
+                
     def auth(self, username):
         url = reverse("token_obtain_pair")
         res = self.client.post(url, {"username": username, "password": "pass12345"}, format="json")

@@ -26,8 +26,8 @@ class ResetPasswordApiTests(APITestCase):
         self.reset_perm = Permission.objects.create(
             code="users.reset_password", name="Reset user passwords"
         )
-        RolePermission.objects.create(role=self.manager_role, permission=self.reset_perm)
-
+        RolePermission.objects.get_or_create(role=self.manager_role, permission=self.reset_perm)
+        
     def auth(self, username):
         url = reverse("token_obtain_pair")
         res = self.client.post(

@@ -39,8 +39,8 @@ class RolesApiTests(APITestCase):
             code="users.view",
             name="View users",
         )
-        RolePermission.objects.create(role=self.hr_role, permission=self.permission)
-
+        RolePermission.objects.get_or_create(role=self.hr_role, permission=self.permission)
+        
     def authenticate(self, username):
         login_url = reverse("token_obtain_pair")
         res = self.client.post(

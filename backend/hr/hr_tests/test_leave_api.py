@@ -37,10 +37,10 @@ class LeaveApiTests(APITestCase):
             )[0]
             for code in ["leaves.*", "approvals.*"]
         }        
-        RolePermission.objects.create(
+        RolePermission.objects.get_or_create(            
             role=self.hr_role, permission=self.permissions["leaves.*"]
         )
-        RolePermission.objects.create(
+        RolePermission.objects.get_or_create(            
             role=self.manager_role, permission=self.permissions["approvals.*"]
         )
 

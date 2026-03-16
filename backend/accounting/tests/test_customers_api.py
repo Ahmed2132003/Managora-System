@@ -32,8 +32,8 @@ class CustomerApiTests(APITestCase):
             ]
         }
         for permission in self.permissions.values():
-            RolePermission.objects.create(role=self.role, permission=permission)
-
+            RolePermission.objects.get_or_create(role=self.role, permission=permission)
+            
     def auth(self):
         url = reverse("token_obtain_pair")
         res = self.client.post(

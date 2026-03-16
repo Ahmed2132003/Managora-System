@@ -25,8 +25,8 @@ class AuditLogTests(APITestCase):
             Permission.objects.create(code="audit.view", name="View audit logs"),
         ]
         for permission in permissions:
-            RolePermission.objects.create(role=self.manager_role, permission=permission)
-
+            RolePermission.objects.get_or_create(role=self.manager_role, permission=permission)
+            
     def authenticate(self):
         url = reverse("token_obtain_pair")
         response = self.client.post(
