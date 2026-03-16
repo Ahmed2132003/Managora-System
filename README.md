@@ -54,4 +54,4 @@ One platform for HR + Attendance + Payroll + Accounting + Dashboards (10–300 e
 - `NOTIFICATIONS_EMAIL_ENABLED` (default `1`)
 DEFAULT_FROM_EMAIL`
 ### Frontend environment variables
-- `VITE_WEB_PUSH_PUBLIC_KEY` (required to enable browser push subscription from the Messages page).
+- `VITE_WEB_PUSH_PUBLIC_KEY` (required to enable browser push subscription from the Messages page)."# Managora-System" 
