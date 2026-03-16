@@ -851,7 +851,10 @@ class PayrollPeriodSerializer(serializers.ModelSerializer):
         created_by = attrs.get("created_by")
         if created_by and company and created_by.company_id != company.id:
             raise serializers.ValidationError({"created_by": "User must belong to the same company."})
-        period_type = attrs.get("period_type", getattr(self.instance, "period_type", None))
+        period_type = attrs.get(
+            "period_type",
+            getattr(self.instance, "period_type", PayrollPeriod.PeriodType.MONTHLY),
+        )        
         start_date = attrs.get("start_date", getattr(self.instance, "start_date", None))
         end_date = attrs.get("end_date", getattr(self.instance, "end_date", None))
         year = attrs.get("year", getattr(self.instance, "year", None))

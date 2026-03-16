@@ -84,15 +84,8 @@ def generate_period(company, year=None, month=None, actor=None, period=None):
         company=company, status=Employee.Status.ACTIVE
     ).select_related("salary_structure")
 
-    if actor:
-        actor_roles = set(actor.roles.values_list("name", flat=True))
-        if "HR" in actor_roles and "Manager" not in actor_roles:
-            employees = employees.filter(
-                Q(user__isnull=True) | Q(user__roles__name__in=["Accountant", "Employee"])
-            ).distinct()
-
     summary = {"generated": 0, "skipped": []}
-
+    
     period_type = period.period_type
     with transaction.atomic():
         for employee in employees:
@@ -154,7 +147,7 @@ def generate_period(company, year=None, month=None, actor=None, period=None):
                 if daily_rate is not None:
                     meta["rate"] = str(_quantize_amount(daily_rate))
                 if attendance_based_salary:
-                    meta["attendance_days"] = str(present_days)
+                    meta["attendance_days"] = int(present_days)                    
                 lines.append(
                     PayrollLine(
                         company=company,
@@ -245,7 +238,7 @@ def generate_period(company, year=None, month=None, actor=None, period=None):
                             type=PayrollLine.LineType.DEDUCTION,
                             amount=absent_amount,
                             meta={
-                                "days": str(absent_days),
+                                "days": int(absent_days),                                
                                 "rate": str(_quantize_amount(daily_rate)),
                             },
                         )
@@ -282,7 +275,7 @@ def generate_period(company, year=None, month=None, actor=None, period=None):
                             type=PayrollLine.LineType.DEDUCTION,
                             amount=unpaid_amount,
                             meta={
-                                "days": str(unpaid_leave_days),
+                                "days": int(unpaid_leave_days),                                
                                 "rate": str(_quantize_amount(daily_rate)),
                             },
                         )

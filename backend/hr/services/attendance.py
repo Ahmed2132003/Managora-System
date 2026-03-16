@@ -253,15 +253,9 @@ def _resolve_qr_payload(payload: dict[str, Any], company) -> WorkSite:
     window = _get_qr_window(company, issued_for)
     if window.worksite.id != worksite_id:
         raise serializers.ValidationError({"qr_token": "QR token not valid for company."})
-    now = timezone.now()
-    if now < window.start:
-        raise serializers.ValidationError({"qr_token": "QR token not active yet."})
-    if now > window.end:
-        raise serializers.ValidationError({"qr_token": "QR token expired."})
 
-    payload["worksite"] = window.worksite
-    return window.worksite
-
+    payload["worksite"] = stored.worksite
+    return stored.worksite
 
 def check_in(user, employee_id: int, payload: dict[str, Any]) -> AttendanceRecord:
     method = _ensure_method(payload)    
