@@ -1873,8 +1873,8 @@ class PayrollRunViewSet(mixins.RetrieveModelMixin, viewsets.GenericViewSet):
                 status=500,
                 content_type="text/plain",
             )
-        return HttpResponse(png_bytes, content_type="image/png")
-
+        return StreamingHttpResponse(iter([png_bytes]), content_type="image/png")
+    
 
 @extend_schema(
     tags=["Payroll"],
@@ -1917,7 +1917,7 @@ class PayrollPeriodLockView(APIView):
         return Response(PayrollPeriodSerializer(period).data)
 
 
-from django.http import HttpResponse
+from django.http import HttpResponse, StreamingHttpResponse
 from corsheaders.defaults import default_headers
 
 @extend_schema(
@@ -2091,7 +2091,7 @@ class PayrollRunPayslipPNGView(APIView):
             return HttpResponse("Payslip generation failed (invalid PNG).", status=500, content_type="text/plain")
 
         filename = f"payslip-{payroll_run.id}.png"
-        resp = HttpResponse(png_bytes, content_type="image/png")
+        resp = StreamingHttpResponse(iter([png_bytes]), content_type="image/png")        
         resp["Content-Disposition"] = f'attachment; filename="{filename}"'
         resp["Content-Length"] = str(len(png_bytes))
         resp["Cache-Control"] = "no-store"
