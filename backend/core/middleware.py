@@ -7,6 +7,8 @@ from django.http import JsonResponse
 from django.shortcuts import render
 from django.utils.deprecation import MiddlewareMixin
 
+from core.audit import clear_audit_context, get_client_ip, set_audit_context
+
 logger = logging.getLogger("managora.request")
 
 class AuditContextMiddleware(MiddlewareMixin):
@@ -16,8 +18,9 @@ class AuditContextMiddleware(MiddlewareMixin):
     """
 
     def process_request(self, request):
+        clear_audit_context()
         request.request_id = request.META.get("HTTP_X_REQUEST_ID") or str(uuid.uuid4())
-
+        
         user = getattr(request, "user", None)
         if user and getattr(user, "is_authenticated", False):
             # Determine the active company for this request.
@@ -40,6 +43,21 @@ class AuditContextMiddleware(MiddlewareMixin):
         # Helpful for downstream usage (optional)
         request.actor_id = getattr(user, "id", None) if user and getattr(user, "is_authenticated", False) else None
 
+        set_audit_context(
+            user=user if user and getattr(user, "is_authenticated", False) else None,
+            ip_address=get_client_ip(request),
+            user_agent=request.META.get("HTTP_USER_AGENT"),
+            request_id=request.request_id,
+            company_id=request.company_id,
+        )
+
+    def process_response(self, request, response):
+        clear_audit_context()
+        return response
+
+    def process_exception(self, request, exception):
+        clear_audit_context()
+        return None
 
 class RequestLoggingMiddleware(MiddlewareMixin):
     """Lightweight request timing/logging middleware.

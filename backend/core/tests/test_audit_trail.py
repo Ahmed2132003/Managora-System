@@ -34,3 +34,20 @@ class AuditTrailSignalTests(TestCase):
         update_log = AuditLog.objects.filter(action="core.role.update").latest("created_at")
         self.assertEqual(update_log.before.get("name"), "Ops")
         self.assertEqual(update_log.after.get("name"), "Operations")
+
+    def test_audit_log_uses_null_actor_for_anonymous_context(self):
+        set_audit_context(user=None, ip_address="127.0.0.1", user_agent="pytest")
+
+        role = Role.objects.create(company=self.company, name="Anonymous Ops")
+
+        log = AuditLog.objects.filter(action="core.role.create", entity_id=str(role.id)).latest("created_at")
+        self.assertIsNone(log.actor)
+
+    def test_audit_log_handles_deleted_actor_without_integrity_error(self):
+        set_audit_context(user=self.user, ip_address="127.0.0.1", user_agent="pytest")
+        self.user.delete()
+
+        role = Role.objects.create(company=self.company, name="Deleted Actor Ops")
+
+        log = AuditLog.objects.filter(action="core.role.create", entity_id=str(role.id)).latest("created_at")
+        self.assertIsNone(log.actor)

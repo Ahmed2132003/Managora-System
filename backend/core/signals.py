@@ -4,13 +4,14 @@ from datetime import date, datetime, time
 from decimal import Decimal
 from typing import Any
 
+from django.db import IntegrityError
 from django.db.models.fields.files import FieldFile
 from django.db.models.signals import post_delete, post_save, pre_save
 from django.dispatch import receiver
 from django.forms.models import model_to_dict
 
 from core.audit import get_audit_context
-from core.models import AuditLog, Company
+from core.models import AuditLog, Company, User
 from core.services.setup_templates import apply_roles
 from hr.services.defaults import ensure_default_shifts
 
@@ -49,6 +50,22 @@ def _should_audit(sender) -> bool:
     )
 
 
+
+
+def _resolve_actor(user):
+    user_id = getattr(user, "id", None) if user is not None else None
+    if not user_id:
+        return None
+    return User.objects.filter(pk=user_id).first()
+
+
+def _create_audit_log_safely(**kwargs):
+    try:
+        return AuditLog.objects.create(**kwargs)
+    except IntegrityError:
+        kwargs["actor"] = None
+        return AuditLog.objects.create(**kwargs)
+
 def _resolve_company(instance, user):
     if hasattr(instance, "company") and instance.company:
         return instance.company
@@ -78,14 +95,15 @@ def audit_post_save(sender, instance, created, **kwargs):
         return
     audit_context = get_audit_context()
     user = audit_context.user if audit_context else None
-    company = _resolve_company(instance, user)
+    actor = _resolve_actor(user)
+    company = _resolve_company(instance, actor)
     if not company:
         return
     before = instance._audit_before if hasattr(instance, "_audit_before") else None
     action = "create" if created else "update"
-    AuditLog.objects.create(
+    _create_audit_log_safely(
         company=company,
-        actor=user,
+        actor=actor,
         action=f"{sender._meta.app_label}.{sender._meta.model_name}.{action}",
         entity=sender._meta.model_name,
         entity_id=str(instance.pk),
@@ -112,12 +130,13 @@ def audit_post_delete(sender, instance, **kwargs):
         return
     audit_context = get_audit_context()    
     user = audit_context.user if audit_context else None
-    company = _resolve_company(instance, user)
+    actor = _resolve_actor(user)
+    company = _resolve_company(instance, actor)
     if not company:
         return
-    AuditLog.objects.create(
+    _create_audit_log_safely(
         company=company,
-        actor=user,
+        actor=actor,
         action=f"{sender._meta.app_label}.{sender._meta.model_name}.delete",
         entity=sender._meta.model_name,
         entity_id=str(instance.pk),
