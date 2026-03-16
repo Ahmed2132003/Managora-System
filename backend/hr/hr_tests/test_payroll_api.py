@@ -35,7 +35,10 @@ class PayrollApiTests(APITestCase):
         )
 
         role, _ = Role.objects.get_or_create(company=self.company, name="HR")
-        permission = Permission.objects.create(code="hr.payroll.*", name="Payroll")
+        permission, _ = Permission.objects.get_or_create(
+            code="hr.payroll.*",
+            defaults={"name": "Payroll"},
+        )        
         RolePermission.objects.create(role=role, permission=permission)
         UserRole.objects.get_or_create(user=self.hr_user, role=role)
 

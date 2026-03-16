@@ -51,7 +51,10 @@ class EmployeeDocumentApiTests(APITestCase):
         UserRole.objects.get_or_create(user=self.other_user, role=self.other_role)
 
         permissions = {
-            code: Permission.objects.create(code=code, name=code)
+            code: Permission.objects.get_or_create(
+                code=code,
+                defaults={"name": code},
+            )[0]
             for code in [
                 "hr.employees.view",
                 "hr.employees.edit",
@@ -59,7 +62,7 @@ class EmployeeDocumentApiTests(APITestCase):
                 "hr.documents.create",
                 "hr.documents.delete",
             ]
-        }
+        }        
         RolePermission.objects.create(
             role=self.hr_role, permission=permissions["hr.employees.edit"]
         )

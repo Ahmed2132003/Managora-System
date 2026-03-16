@@ -31,9 +31,12 @@ class LeaveApiTests(APITestCase):
         UserRole.objects.get_or_create(user=self.manager_user, role=self.manager_role)
 
         self.permissions = {
-            code: Permission.objects.create(code=code, name=code)
+            code: Permission.objects.get_or_create(
+                code=code,
+                defaults={"name": code},
+            )[0]
             for code in ["leaves.*", "approvals.*"]
-        }
+        }        
         RolePermission.objects.create(
             role=self.hr_role, permission=self.permissions["leaves.*"]
         )
