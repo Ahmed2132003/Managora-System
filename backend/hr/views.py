@@ -9,6 +9,7 @@ from django.conf import settings
 from django.utils.dateparse import parse_date
 from drf_spectacular.utils import extend_schema, extend_schema_view
 from rest_framework import filters, mixins, status, viewsets
+from rest_framework.decorators import action
 from rest_framework.exceptions import PermissionDenied, ValidationError
 from rest_framework.generics import (
     CreateAPIView,
@@ -1801,6 +1802,78 @@ class PayrollRunDetailView(APIView):
 
         serializer = PayrollRunDetailSerializer(payroll_run)
         return Response(serializer.data)
+
+
+@extend_schema_view(
+    retrieve=extend_schema(
+        tags=["Payroll"],
+        summary="Retrieve payroll run details",
+        responses={200: PayrollRunDetailSerializer},
+    )
+)
+class PayrollRunViewSet(mixins.RetrieveModelMixin, viewsets.GenericViewSet):
+    permission_classes = [IsAuthenticated]
+    serializer_class = PayrollRunDetailSerializer
+    lookup_field = "id"
+    lookup_url_kwarg = "id"
+    lookup_value_regex = "\\d+"
+
+    def get_queryset(self):
+        return PayrollRun.objects.filter(company=self.request.user.company).select_related(
+            "employee"
+        )
+
+    def retrieve(self, request, *args, **kwargs):
+        payroll_run = self.get_object()
+        has_permission = _user_has_payroll_permission(
+            request.user,
+            ["hr.payroll.view", "hr.payroll.*", "hr.payroll.payslip"],
+        )
+        if not has_permission:
+            employee = getattr(request.user, "employee_profile", None)
+            if not employee or employee.id != payroll_run.employee_id:
+                raise PermissionDenied("You do not have permission to view this payslip.")
+        return Response(self.get_serializer(payroll_run).data)
+
+    @action(detail=True, methods=["post"], url_path="mark-paid")
+    def mark_paid(self, request, id=None):
+        if not _user_has_payroll_permission(request.user, ["hr.payroll.pay", "hr.payroll.*"]):
+            raise PermissionDenied("You do not have permission to mark payroll runs as paid.")
+
+        payroll_run = self.get_object()
+        if payroll_run.status != PayrollRun.Status.PAID:
+            payroll_run.status = PayrollRun.Status.PAID
+            payroll_run.save(update_fields=["status", "updated_at"])
+        return Response(self.get_serializer(payroll_run).data)
+
+    @action(detail=True, methods=["get"])
+    def payslip(self, request, id=None):
+        payroll_run = self.get_object()
+        has_permission = _user_has_payroll_permission(
+            request.user,
+            ["hr.payroll.view", "hr.payroll.payslip", "hr.payroll.*"],
+        )
+        if not has_permission:
+            employee = getattr(request.user, "employee_profile", None)
+            if not employee or employee.id != payroll_run.employee_id:
+                raise PermissionDenied("You do not have permission to view this payslip.")
+
+        from hr.services.payslip import render_payslip_png
+
+        manager_name = "-"
+        if request.user.is_superuser or "manager" in _user_role_names(request.user):
+            manager_name = _format_user_name(request.user)
+        hr_name = _format_user_name(_get_company_role_user(request.user.company, "hr"))
+        png_bytes = render_payslip_png(
+            payroll_run, dpi=200, manager_name=manager_name, hr_name=hr_name
+        )
+        if not png_bytes or png_bytes[:8] != b"\x89PNG\r\n\x1a\n":
+            return HttpResponse(
+                "Payslip generation failed (invalid PNG).",
+                status=500,
+                content_type="text/plain",
+            )
+        return HttpResponse(png_bytes, content_type="image/png")
 
 
 @extend_schema(

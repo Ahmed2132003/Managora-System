@@ -16,7 +16,8 @@ from hr.payroll.views import (
     PayrollPeriodLockView,
     PayrollPeriodRunsListView,
     PayrollRunDetailView,
-    PayrollRunMarkPaidView,
+    PayrollRunViewSet,
+    PayrollRunMarkPaidView,    
     PayrollRunMyListView,
     PayrollRunPayslipPDFView,
     PayrollRunPayslipPNGView,
@@ -28,6 +29,7 @@ router = DefaultRouter()
 router.register("salary-structures", SalaryStructureViewSet, basename="salary-structure")
 router.register("salary-components", SalaryComponentViewSet, basename="salary-component")
 router.register("loan-advances", LoanAdvanceViewSet, basename="loan-advance")
+router.register("payroll/runs", PayrollRunViewSet, basename="payroll-run")
 
 urlpatterns = [
     path("commissions/requests/my/", CommissionRequestMyListView.as_view(), name="commission-request-my"),

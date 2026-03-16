@@ -275,7 +275,7 @@ def generate_period(company, year=None, month=None, actor=None, period=None):
                             type=PayrollLine.LineType.DEDUCTION,
                             amount=unpaid_amount,
                             meta={
-                                "days": int(unpaid_leave_days),                                
+                                "days": str(int(unpaid_leave_days)),                                                                                            
                                 "rate": str(_quantize_amount(daily_rate)),
                             },
                         )
