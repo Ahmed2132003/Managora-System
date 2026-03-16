@@ -37,35 +37,45 @@ class HrApiTests(APITestCase):
         UserRole.objects.get_or_create(user=self.manager, role=self.manager_role)
         UserRole.objects.get_or_create(user=self.accountant, role=self.accountant_role)
 
-        self.permissions = {
-            code: Permission.objects.create(code=code, name=code)
-            for code in [
-                "hr.departments.view",
-                "hr.departments.create",
-                "hr.departments.edit",
-                "hr.departments.delete",
-                "hr.job_titles.view",
-                "hr.job_titles.create",
-                "hr.job_titles.edit",
-                "hr.job_titles.delete",
-                "hr.employees.view",
-                "hr.employees.create",
-                "hr.employees.edit",
-                "hr.employees.delete",
-                "hr.shifts.view",
-                "hr.shifts.create",
-                "hr.shifts.edit",
-                "hr.shifts.delete",
-                "hr.worksites.view",
-                "hr.worksites.create",
-                "hr.worksites.edit",
-                "hr.worksites.delete",
-            ]
-        }
-        for permission in self.permissions.values():
-            RolePermission.objects.create(role=self.manager_role, permission=permission)
-            RolePermission.objects.create(role=self.hr_role, permission=permission)
+        permission_codes = [
+            "hr.departments.view",
+            "hr.departments.create",
+            "hr.departments.edit",
+            "hr.departments.delete",
+            "hr.job_titles.view",
+            "hr.job_titles.create",
+            "hr.job_titles.edit",
+            "hr.job_titles.delete",
+            "hr.employees.view",
+            "hr.employees.create",
+            "hr.employees.edit",
+            "hr.employees.delete",
+            "hr.shifts.view",
+            "hr.shifts.create",
+            "hr.shifts.edit",
+            "hr.shifts.delete",
+            "hr.worksites.view",
+            "hr.worksites.create",
+            "hr.worksites.edit",
+            "hr.worksites.delete",
+        ]
+        self.permissions = {}
+        for code in permission_codes:
+            permission, _ = Permission.objects.get_or_create(
+                code=code,
+                defaults={"name": code},
+            )
+            self.permissions[code] = permission
 
+        for permission in self.permissions.values():
+            RolePermission.objects.get_or_create(
+                role=self.manager_role,
+                permission=permission,
+            )
+            RolePermission.objects.get_or_create(
+                role=self.hr_role,
+                permission=permission,
+            )
         for code in [
             "hr.shifts.view",
             "hr.shifts.create",
@@ -76,13 +86,16 @@ class HrApiTests(APITestCase):
             "hr.worksites.edit",
             "hr.worksites.delete",
         ]:
-            RolePermission.objects.create(role=self.accountant_role, permission=self.permissions[code])
+            RolePermission.objects.get_or_create(
+                role=self.accountant_role,
+                permission=self.permissions[code],
+            )
 
-        RolePermission.objects.create(
+        RolePermission.objects.get_or_create(
             role=self.manager_role,
             permission=self.permissions["hr.employees.view"],
         )
-
+        
         self.department = Department.objects.create(
             company=self.c1, name="Engineering", is_active=True
         )
