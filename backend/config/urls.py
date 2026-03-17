@@ -13,14 +13,8 @@ urlpatterns = [
     # OpenAPI    
     path("api/schema/", SpectacularAPIView.as_view(), name="schema"),
     path("api/docs/", SpectacularSwaggerView.as_view(url_name="schema"), name="swagger-ui"),
-    path("api/", include("core.api_urls")),
-    path("api/", include("hr.api_urls")),
-    path("api/", include("accounting.api_urls")),
-    path("api/", include("analytics.api_urls")),
-    path("api/v1/", include("core.api_urls")),
-    path("api/v1/", include("hr.api_urls")),
-    path("api/v1/", include("accounting.api_urls")),
-    path("api/v1/", include("analytics.api_urls")),
+    # API (versioned router with backward compatibility)
+    path("api/", include("config.api_router")),
 
 ]
 
