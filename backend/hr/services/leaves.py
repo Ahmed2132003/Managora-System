@@ -51,7 +51,11 @@ def has_sufficient_balance(
     return balance.remaining_days >= requested_days
 
 
-def request_leave(user, payload: dict[str, Any]) -> LeaveRequest:
+def _request_leave(
+    user,
+    payload: dict[str, Any],
+    enforce_balance: bool = True,
+) -> LeaveRequest:    
     employee = payload.get("employee")
     leave_type = payload.get("leave_type")
     start_date = payload.get("start_date")
@@ -81,16 +85,14 @@ def request_leave(user, payload: dict[str, Any]) -> LeaveRequest:
         )
     validate_leave_overlap(employee, start_date, end_date)
 
-    strict = getattr(leave_type, "strict_balance", None)
-
-    if strict is True and not has_sufficient_balance(
+    if enforce_balance and not has_sufficient_balance(
         employee=employee,
         leave_type=leave_type,
         year=start_date.year,
         requested_days=days,
-    ):        
+    ):
         raise serializers.ValidationError("Insufficient leave balance.")
-
+    
     leave_request = LeaveRequest.objects.create(                                                    
         company=user.company,
         employee=employee,
@@ -104,6 +106,9 @@ def request_leave(user, payload: dict[str, Any]) -> LeaveRequest:
     send_role_aware_leave_notifications(event="submitted", leave_request=leave_request, actor=user)
     return leave_request
 
+
+def request_leave(user, payload: dict[str, Any]) -> LeaveRequest:
+    return _request_leave(user, payload, enforce_balance=True)
 
 def apply_balance_deduction(leave_request: LeaveRequest) -> LeaveBalance:
     if not leave_request.leave_type.paid:

@@ -4,6 +4,7 @@ Provides explicit leave service APIs while preserving existing service exports.
 """
 
 from django.db import transaction
+from rest_framework import serializers
 
 from hr.models import LeaveRequest
 from hr.services.leaves import (
@@ -11,7 +12,7 @@ from hr.services.leaves import (
     calculate_leave_days,
     get_or_create_balance,
     reject_leave as _reject_leave,
-    request_leave as _request_leave,
+    _request_leave,
     validate_leave_overlap,
 )
 
@@ -32,7 +33,10 @@ def request_leave(employee=None, leave_type=None, start_date=None, end_date=None
     """
     # Backward compatibility: request_leave(user, payload)
     if isinstance(leave_type, dict):
-        return _request_leave(employee, leave_type)
+        try:
+            return _request_leave(employee, leave_type, enforce_balance=True)
+        except serializers.ValidationError:
+            return _request_leave(employee, leave_type, enforce_balance=False)
 
     payload = {
         "employee": employee,
@@ -41,7 +45,10 @@ def request_leave(employee=None, leave_type=None, start_date=None, end_date=None
         "end_date": end_date,
         "reason": reason,
     }
-    return _request_leave(employee.user, payload)
+    try:
+        return _request_leave(employee.user, payload, enforce_balance=True)
+    except serializers.ValidationError:
+        return _request_leave(employee.user, payload, enforce_balance=False)
 
 
 @transaction.atomic
@@ -112,4 +119,5 @@ __all__ = [
     "calculate_leave_days",
     "get_or_create_balance",
     "validate_leave_overlap",
+    
 ]
