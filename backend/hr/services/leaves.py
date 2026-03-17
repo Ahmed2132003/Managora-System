@@ -81,12 +81,14 @@ def request_leave(user, payload: dict[str, Any]) -> LeaveRequest:
         )
     validate_leave_overlap(employee, start_date, end_date)
 
-    if leave_type.strict_balance and not has_sufficient_balance(
+    strict = getattr(leave_type, "strict_balance", None)
+
+    if strict is True and not has_sufficient_balance(
         employee=employee,
         leave_type=leave_type,
         year=start_date.year,
         requested_days=days,
-    ):
+    ):        
         raise serializers.ValidationError("Insufficient leave balance.")
 
     leave_request = LeaveRequest.objects.create(                                                    
