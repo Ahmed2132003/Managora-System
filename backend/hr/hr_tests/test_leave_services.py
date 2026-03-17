@@ -167,7 +167,7 @@ class LeaveServicesTests(TestCase):
             name="Compassionate",
             code="COMP",
             allow_negative_balance=False,
-            strict_balance=False,
+            requires_balance=False,
         )
         LeaveBalance.all_objects.create(
             company=self.company,
@@ -194,7 +194,7 @@ class LeaveServicesTests(TestCase):
             name="Bereavement",
             code="BER",
             allow_negative_balance=False,
-            strict_balance=False,
+            requires_balance=False,
         )
         LeaveBalance.all_objects.create(
             company=self.company,
@@ -216,9 +216,16 @@ class LeaveServicesTests(TestCase):
             approve_leave(leave_request=leave_request, approved_by=self.approver)
 
     def test_cancel_leave_marks_pending_request_cancelled(self):
+        flexible_leave_type = LeaveType.all_objects.create(
+            company=self.company,
+            name="Unpaid",
+            code="UNPAID",
+            requires_balance=False,
+        )
+
         leave_request = request_leave(
             employee=self.employee,
-            leave_type=self.leave_type,
+            leave_type=flexible_leave_type,
             start_date=datetime.date(2025, 10, 1),
             end_date=datetime.date(2025, 10, 1),
         )

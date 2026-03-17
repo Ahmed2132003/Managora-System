@@ -31,27 +31,10 @@ def request_leave(employee=None, leave_type=None, start_date=None, end_date=None
     Returns:
         LeaveRequest: Newly created pending leave request.
     """
-    def _is_strict_balance_policy(resolved_leave_type):
-        return getattr(resolved_leave_type, "strict_balance", True)
-
     # Backward compatibility: request_leave(user, payload)
     if isinstance(leave_type, dict):
         payload = leave_type
-        strict = _is_strict_balance_policy(payload.get("leave_type"))
-        try:
-            return _request_leave(
-                employee,
-                payload,
-                enforce_balance=strict,
-                force_create=False,
-            )
-        except serializers.ValidationError:
-            return _request_leave(
-                employee,
-                payload,
-                enforce_balance=False,
-                force_create=True,
-            )
+        return _request_leave(employee, payload)
 
     payload = {
         "employee": employee,
@@ -60,21 +43,8 @@ def request_leave(employee=None, leave_type=None, start_date=None, end_date=None
         "end_date": end_date,
         "reason": reason,
     }
-    strict = _is_strict_balance_policy(leave_type)
-    try:
-        return _request_leave(
-            employee.user,
-            payload,
-            enforce_balance=strict,
-            force_create=False,
-        )
-    except serializers.ValidationError:
-        return _request_leave(
-            employee.user,
-            payload,
-            enforce_balance=False,
-            force_create=True,
-        )
+    return _request_leave(employee.user, payload)
+
 
 @transaction.atomic
 def approve_leave(leave_request=None, approved_by=None, *args):
@@ -127,8 +97,6 @@ def cancel_leave(leave_request):
         LeaveRequest: Updated leave request with cancelled status.
     """
     if leave_request.status != LeaveRequest.Status.PENDING:
-        from rest_framework import serializers
-
         raise serializers.ValidationError("Only pending requests can be cancelled.")
 
     leave_request.status = LeaveRequest.Status.CANCELLED

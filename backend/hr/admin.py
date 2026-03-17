@@ -168,6 +168,7 @@ class LeaveTypeAdmin(admin.ModelAdmin):
         "company",
         "requires_approval",
         "paid",
+        "requires_balance",
         "max_per_request_days",
         "allow_negative_balance",
         "is_active",

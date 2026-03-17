@@ -41,22 +41,10 @@ def get_or_create_balance(employee: Employee, leave_type: LeaveType, year: int) 
     )
     return balance
 
-
-def has_sufficient_balance(
-    employee: Employee, leave_type: LeaveType, year: int, requested_days: Decimal
-) -> bool:
-    if not leave_type.paid or leave_type.allow_negative_balance:
-        return True
-    balance = get_or_create_balance(employee, leave_type, year)
-    return balance.remaining_days >= requested_days
-
-
 def _request_leave(
     user,
     payload: dict[str, Any],
-    enforce_balance: bool = True,
-    force_create: bool = False,
-) -> LeaveRequest:            
+) -> LeaveRequest:
     employee = payload.get("employee")
     leave_type = payload.get("leave_type")
     start_date = payload.get("start_date")
@@ -86,16 +74,8 @@ def _request_leave(
         )
     validate_leave_overlap(employee, start_date, end_date)
 
-    if (
-        not force_create
-        and enforce_balance
-        and not has_sufficient_balance(
-        employee=employee,
-        leave_type=leave_type,
-        year=start_date.year,
-        requested_days=days,
-    )
-    ):
+    leave_balance = get_or_create_balance(employee, leave_type, start_date.year).remaining_days
+    if leave_type.requires_balance and leave_balance < days:
         raise serializers.ValidationError("Insufficient leave balance.")
         
     leave_request = LeaveRequest.objects.create(                                                    
@@ -113,7 +93,7 @@ def _request_leave(
 
 
 def request_leave(user, payload: dict[str, Any]) -> LeaveRequest:
-    return _request_leave(user, payload, enforce_balance=True, force_create=False)
+    return _request_leave(user, payload)
 
 def apply_balance_deduction(leave_request: LeaveRequest) -> LeaveBalance:
     if not leave_request.leave_type.paid:

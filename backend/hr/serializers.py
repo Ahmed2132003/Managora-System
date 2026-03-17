@@ -533,6 +533,7 @@ class LeaveTypeSerializer(serializers.ModelSerializer):
             "code",
             "requires_approval",
             "paid",
+            "requires_balance",
             "max_per_request_days",
             "allow_negative_balance",
             "strict_balance",
