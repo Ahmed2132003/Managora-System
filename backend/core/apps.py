@@ -6,6 +6,6 @@ class CoreConfig(AppConfig):
 
     def ready(self):
         from core import signals  # noqa: F401
-        from core.events import register_event_handlers
-
+        from .events import register_event_handlers
+        
         register_event_handlers()
