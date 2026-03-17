@@ -161,6 +161,60 @@ class LeaveServicesTests(TestCase):
         balance.refresh_from_db()
         self.assertEqual(balance.used_days, Decimal("4"))
 
+    def test_request_leave_allows_insufficient_balance_for_soft_policy(self):
+        soft_leave_type = LeaveType.all_objects.create(
+            company=self.company,
+            name="Compassionate",
+            code="COMP",
+            allow_negative_balance=False,
+            strict_balance=False,
+        )
+        LeaveBalance.all_objects.create(
+            company=self.company,
+            employee=self.employee,
+            leave_type=soft_leave_type,
+            year=2025,
+            allocated_days=Decimal("1"),
+            used_days=Decimal("0"),
+        )
+
+        leave_request = request_leave(
+            employee=self.employee,
+            leave_type=soft_leave_type,
+            start_date=datetime.date(2025, 11, 1),
+            end_date=datetime.date(2025, 11, 3),
+        )
+
+        self.assertEqual(leave_request.status, LeaveRequest.Status.PENDING)
+        self.assertEqual(leave_request.days, Decimal("3"))
+
+    def test_approve_leave_rejects_insufficient_balance_for_soft_policy(self):
+        soft_leave_type = LeaveType.all_objects.create(
+            company=self.company,
+            name="Bereavement",
+            code="BER",
+            allow_negative_balance=False,
+            strict_balance=False,
+        )
+        LeaveBalance.all_objects.create(
+            company=self.company,
+            employee=self.employee,
+            leave_type=soft_leave_type,
+            year=2025,
+            allocated_days=Decimal("1"),
+            used_days=Decimal("0"),
+        )
+
+        leave_request = request_leave(
+            employee=self.employee,
+            leave_type=soft_leave_type,
+            start_date=datetime.date(2025, 12, 1),
+            end_date=datetime.date(2025, 12, 3),
+        )
+
+        with self.assertRaises(serializers.ValidationError):
+            approve_leave(leave_request=leave_request, approved_by=self.approver)
+
     def test_cancel_leave_marks_pending_request_cancelled(self):
         leave_request = request_leave(
             employee=self.employee,

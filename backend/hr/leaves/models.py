@@ -17,6 +17,7 @@ class LeaveType(BaseModel):
     paid = models.BooleanField(default=True)
     max_per_request_days = models.PositiveIntegerField(null=True, blank=True)
     allow_negative_balance = models.BooleanField(default=False)
+    strict_balance = models.BooleanField(default=True)
     is_active = models.BooleanField(default=True)
 
     class Meta:
