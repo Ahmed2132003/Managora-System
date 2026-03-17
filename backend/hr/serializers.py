@@ -671,12 +671,6 @@ class LeaveRequestCreateSerializer(serializers.ModelSerializer):
         attrs["employee"] = employee
         return attrs
 
-    def create(self, validated_data):
-        from hr.services.leaves import request_leave
-
-        user = self.context["request"].user
-        return request_leave(user, validated_data)
-
 
 class LeaveDecisionSerializer(serializers.Serializer):
     reason = serializers.CharField(required=False, allow_blank=True, allow_null=True)

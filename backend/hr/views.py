@@ -49,7 +49,7 @@ from hr.models import (
     Shift,
     WorkSite,
 )
-from hr.services.attendance import (
+from hr.attendance.services import (    
     check_in,
     check_out,
     request_self_attendance_otp,
@@ -98,7 +98,7 @@ from hr.serializers import (
     LoanAdvanceSerializer,
 )
 from hr.services.generator import generate_period
-from hr.services.leaves import approve_leave, reject_leave
+from hr.leaves.services import approve_leave, reject_leave, request_leave, cancel_leave
 from hr.services.lock import lock_period
 from hr.services.payslip import render_payslip_pdf
 import re
@@ -1351,7 +1351,13 @@ class LeaveRequestCreateView(CreateAPIView):
     def create(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        leave_request = serializer.save()
+        leave_request = request_leave(
+            employee=serializer.validated_data["employee"],
+            leave_type=serializer.validated_data["leave_type"],
+            start_date=serializer.validated_data["start_date"],
+            end_date=serializer.validated_data["end_date"],
+            reason=serializer.validated_data.get("reason"),
+        )        
         return Response(
             LeaveRequestSerializer(leave_request).data, status=status.HTTP_201_CREATED
         )
@@ -1409,13 +1415,10 @@ class LeaveRequestCancelView(APIView):
         leave_request = get_object_or_404(
             LeaveRequest, id=id, company=request.user.company, employee=employee
         )
-        if leave_request.status != LeaveRequest.Status.PENDING:
-            raise ValidationError("Only pending requests can be cancelled.")
-
-        leave_request.status = LeaveRequest.Status.CANCELLED
+        leave_request = cancel_leave(leave_request)        
         leave_request.decided_by = request.user
         leave_request.decided_at = timezone.now()
-        leave_request.save(update_fields=["status", "decided_by", "decided_at"])
+        leave_request.save(update_fields=["decided_by", "decided_at", "updated_at"])        
         return Response(LeaveRequestSerializer(leave_request).data)
 
 
@@ -1481,7 +1484,7 @@ class LeaveApproveView(APIView):
         if not _user_can_approve(request.user, leave_request):
             raise PermissionDenied("You do not have permission to approve this request.")
 
-        leave_request = approve_leave(request.user, leave_request.id)
+        leave_request = approve_leave(leave_request=leave_request, approved_by=request.user)        
         return Response(LeaveRequestSerializer(leave_request).data)
 
 
@@ -1504,7 +1507,9 @@ class LeaveRejectView(APIView):
         serializer = LeaveDecisionSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         leave_request = reject_leave(
-            request.user, leave_request.id, serializer.validated_data.get("reason")
+            leave_request=leave_request,
+            rejected_by=request.user,
+            reason=serializer.validated_data.get("reason"),            
         )
         return Response(LeaveRequestSerializer(leave_request).data)
 
