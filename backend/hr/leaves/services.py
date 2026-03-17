@@ -4,7 +4,6 @@ Provides explicit leave service APIs while preserving existing service exports.
 """
 
 from django.db import transaction
-from rest_framework import serializers
 
 from hr.models import LeaveRequest
 from hr.services.leaves import (
@@ -31,13 +30,14 @@ def request_leave(employee=None, leave_type=None, start_date=None, end_date=None
     Returns:
         LeaveRequest: Newly created pending leave request.
     """
+    def _is_strict_balance_policy(resolved_leave_type):
+        return getattr(resolved_leave_type, "strict_balance", True)
+
     # Backward compatibility: request_leave(user, payload)
     if isinstance(leave_type, dict):
-        try:
-            return _request_leave(employee, leave_type, enforce_balance=True)
-        except serializers.ValidationError:
-            return _request_leave(employee, leave_type, enforce_balance=False)
-
+        strict = _is_strict_balance_policy(leave_type.get("leave_type"))
+        return _request_leave(employee, leave_type, enforce_balance=strict)
+    
     payload = {
         "employee": employee,
         "leave_type": leave_type,
@@ -45,11 +45,8 @@ def request_leave(employee=None, leave_type=None, start_date=None, end_date=None
         "end_date": end_date,
         "reason": reason,
     }
-    try:
-        return _request_leave(employee.user, payload, enforce_balance=True)
-    except serializers.ValidationError:
-        return _request_leave(employee.user, payload, enforce_balance=False)
-
+    strict = _is_strict_balance_policy(leave_type)
+    return _request_leave(employee.user, payload, enforce_balance=strict)
 
 @transaction.atomic
 def approve_leave(leave_request=None, approved_by=None, *args):
