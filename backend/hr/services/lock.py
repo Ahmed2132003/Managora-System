@@ -1,7 +1,7 @@
 from django.db import transaction
 from django.utils import timezone
 
-from accounting.services.payroll_journal import generate_payroll_journal
+from core.events import dispatch
 from hr.models import PayrollPeriod, PayrollRun
 
 
@@ -15,5 +15,12 @@ def lock_period(period, actor):
         period.save(update_fields=["status", "locked_at", "updated_at"])
         PayrollRun.objects.filter(period=period).update(status=PayrollRun.Status.APPROVED)
         if PayrollRun.objects.filter(period=period).exists():
-            generate_payroll_journal(period, actor)
+            dispatch(
+                "payroll.approved",
+                {
+                    "payroll_period_id": period.id,
+                    "company_id": period.company_id,
+                    "actor_id": actor.id if actor else None,
+                },
+            )
     return period
