@@ -1,17 +1,14 @@
 from calendar import monthrange
 from datetime import date
 from decimal import Decimal
-
+from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import transaction
 from django.db.models import Sum
 from rest_framework.exceptions import ValidationError
 
 from accounting.models import AccountMapping, JournalEntry, JournalLine
+from accounting.services.mappings import ensure_mapping_account
 from hr.models import PayrollRun
-
-def _period_end_date(period):
-    last_day = monthrange(period.year, period.month)[1]
-    return date(period.year, period.month, last_day)
 
 
 
@@ -21,42 +18,36 @@ REQUIRED_PAYROLL_MAPPING_KEYS = (
 )
 
 
+def _period_end_date(period):
+    last_day = monthrange(period.year, period.month)[1]
+    return date(period.year, period.month, last_day)
+
+
 def get_required_payroll_mappings(company):
-    mappings = {
-        mapping.key: mapping
-        for mapping in AccountMapping.objects.filter(
-            company=company,
-            key__in=REQUIRED_PAYROLL_MAPPING_KEYS,
-        ).select_related("account")
-    }
-    missing = [
-        key
-        for key in REQUIRED_PAYROLL_MAPPING_KEYS
-        if key not in mappings or not mappings[key].account_id
-    ]
-    if missing:
-        raise ValidationError(
-            {
-                "detail": (
-                    "Missing required AccountMapping keys: "
-                    + ", ".join(sorted(missing))
-                )
-            }
+    mappings = {}
+    for key in REQUIRED_PAYROLL_MAPPING_KEYS:
+        try:
+            ensure_mapping_account(company, key)
+        except DjangoValidationError as exc:
+            raise ValidationError({"detail": exc.message}) from exc
+        mappings[key] = (
+            AccountMapping.objects.filter(company=company, key=key)
+            .select_related("account")
+            .get()
         )
     return mappings
 
-def generate_payroll_journal(period, actor=None):
+
+def create_payroll_journal_entry(period, actor=None):
     company = period.company
-    existing = JournalEntry.objects.filter(
-        company=company,        
+    existing_entry = JournalEntry.objects.filter(
+        company=company,
         reference_type=JournalEntry.ReferenceType.PAYROLL_PERIOD,
         reference_id=str(period.id),
     ).first()
-    if existing:
-        return existing
+    if existing_entry:
+        return existing_entry, False
 
-    mappings = get_required_payroll_mappings(company)
-                
     totals = PayrollRun.objects.filter(period=period).aggregate(
         gross_total=Sum("earnings_total"),
         net_total=Sum("net_total"),
@@ -67,6 +58,7 @@ def generate_payroll_journal(period, actor=None):
     if gross_total <= 0 or net_total <= 0:
         raise ValidationError({"detail": "Payroll totals must be greater than zero."})
 
+    mappings = get_required_payroll_mappings(company)
     salaries_account = mappings[AccountMapping.Key.PAYROLL_SALARIES_EXPENSE].account
     payable_account = mappings[AccountMapping.Key.PAYROLL_PAYABLE].account
 
@@ -101,4 +93,10 @@ def generate_payroll_journal(period, actor=None):
             ]
         )
 
+    return entry, True
+
+
+
+def generate_payroll_journal(period, actor=None):
+    entry, _ = create_payroll_journal_entry(period, actor=actor)
     return entry
