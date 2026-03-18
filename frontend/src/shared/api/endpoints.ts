@@ -74,14 +74,14 @@ export const endpoints = {
     loanAdvances: api("/loan-advances/"),
     loanAdvance: (id: number) => api(`/loan-advances/${id}/`),
 
-    attendanceRecords: api("/attendance/records/"),
-    attendanceMy: api("/attendance/my/"),
-    attendanceSelfRequestOtp: api("/attendance/self/request-otp/"),
-    attendanceSelfVerifyOtp: api("/attendance/self/verify-otp/"),
-    attendanceEmailConfig: api("/attendance/hr/email-config/"),
-    attendancePendingApprovals: api("/attendance/hr/pending/"),
+    attendanceRecords: api("/attendance/"),
+    attendanceMy: api("/attendance/mine/"),
+    attendanceSelfRequestOtp: api("/attendance/request-otp/"),
+    attendanceSelfVerifyOtp: api("/attendance/verify-otp/"),
+    attendanceEmailConfig: api("/attendance/email-config/"),
+    attendancePendingApprovals: api("/attendance/pending/"),    
     attendanceApproveReject: (recordId: number, action: "approve" | "reject") =>
-      api(`/attendance/hr/${recordId}/${action}/`),
+      api(`/attendance/${recordId}/${action}/`),
 
     leaveTypes: api("/leaves/types/"),
     leaveBalances: api("/leaves/balances/"),

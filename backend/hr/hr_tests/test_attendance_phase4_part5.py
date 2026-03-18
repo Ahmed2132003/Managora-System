@@ -137,7 +137,7 @@ class AttendancePhase4Part5ApiTests(APITestCase):
             code="attendance.*",
             defaults={"name": "attendance.*"},
         )        
-        RolePermission.objects.get_or_create(            
+        RolePermission.objects.get_or_create(                                                      
             role=self.hr_role, permission=self.attendance_permission
         )
         UserRole.objects.get_or_create(user=self.hr_user, role=self.hr_role)
@@ -212,7 +212,7 @@ class AttendancePhase4Part5ApiTests(APITestCase):
         )
 
         self.auth("hr")
-        url = reverse("attendance-record-list")
+        url = reverse("attendance-list")        
         res = self.client.get(url)
         self.assertEqual(res.status_code, status.HTTP_200_OK)
         self.assertEqual(len(res.data), 1)
@@ -226,7 +226,7 @@ class AttendancePhase4Part5ApiTests(APITestCase):
             "method": AttendanceRecord.Method.QR,
             "qr_token": token_data["token"],
             "lat": 30.044420,
-            "lng": 31.235712,            
+            "lng": 31.235712,                      
         }
 
         self.auth("employee")

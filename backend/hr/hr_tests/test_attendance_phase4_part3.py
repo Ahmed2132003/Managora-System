@@ -29,8 +29,8 @@ class AttendancePhase4Part3ApiTests(APITestCase):
         self.attendance_permission, _ = Permission.objects.get_or_create(
             code="attendance.*",
             defaults={"name": "attendance.*"},
-        )        
-        RolePermission.objects.get_or_create(            
+        )
+        RolePermission.objects.get_or_create(                                                    
             role=self.hr_role, permission=self.attendance_permission
         )
         UserRole.objects.get_or_create(user=self.hr_user, role=self.hr_role)
@@ -205,7 +205,7 @@ class AttendancePhase4Part3ApiTests(APITestCase):
         )
 
         self.auth("employee")
-        url = reverse("attendance-my")
+        url = reverse("attendance-mine")        
         res = self.client.get(url)
         self.assertEqual(res.status_code, status.HTTP_200_OK)
         self.assertEqual(len(res.data), 1)
