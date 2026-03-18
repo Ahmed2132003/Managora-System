@@ -15,7 +15,7 @@ def register_domain_event_handlers() -> None:
 def _register_accounting_handlers() -> None:
     """Register accounting-related handlers if the module is available."""
     try:
-        from accounting.events.handlers import handle_payroll_accounting
+        from accounting.events import handle_payroll_accounting        
     except ModuleNotFoundError:
         logger.warning(
             "Accounting event handlers module is unavailable; "

@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from datetime import timedelta
+from dataclasses import dataclass
+from datetime import datetime, timedelta
 
 from django.conf import settings
 from django.db import transaction
@@ -11,7 +12,7 @@ from django.utils import timezone
 from rest_framework.exceptions import PermissionDenied, ValidationError
 
 from core.permissions import user_has_permission
-from hr.models import AttendanceRecord
+from hr.models import AttendanceRecord, Employee
 from hr.services.attendance import (
     approve_attendance_action,
     check_in as attendance_check_in,
@@ -24,6 +25,12 @@ from hr.services.attendance import (
 
 APPROVAL_MANAGER_PERMISSION_CODES = ("attendance.*", "approvals.*")
 
+
+@dataclass(frozen=True)
+class _AttendanceServiceActor:
+    company: object
+    company_id: int
+    
 
 def parse_date_range(date_from=None, date_to=None, *, default_days=None):
     if not date_from and not date_to and default_days is not None:
@@ -42,6 +49,20 @@ def perform_check_in(*, actor, payload: dict) -> AttendanceRecord:
 def perform_check_out(*, actor, payload: dict) -> AttendanceRecord:
     employee = resolve_action_employee(actor=actor, payload=payload, action_name="check out")
     return attendance_check_out(actor, employee.id, payload)
+
+
+@transaction.atomic
+def record_check_in(*, employee: Employee, location: dict, timestamp: datetime | None = None) -> AttendanceRecord:
+    employee = validate_employee_for_attendance(employee)
+    actor = _AttendanceServiceActor(company=employee.company, company_id=employee.company_id)
+    return attendance_check_in(actor, employee.id, location, timestamp=timestamp)
+
+
+@transaction.atomic
+def record_check_out(*, employee: Employee, location: dict, timestamp: datetime | None = None) -> AttendanceRecord:
+    employee = validate_employee_for_attendance(employee)
+    actor = _AttendanceServiceActor(company=employee.company, company_id=employee.company_id)
+    return attendance_check_out(actor, employee.id, location, timestamp=timestamp)
 
 
 @transaction.atomic
@@ -86,18 +107,24 @@ def resolve_action_employee(*, actor, payload: dict, action_name: str):
     employee = payload["employee"]
     linked_employee = getattr(actor, "employee_profile", None)
 
-    if linked_employee:
-        if employee.id != linked_employee.id:
-            raise PermissionDenied(f"You can only {action_name} for yourself.")
+    if linked_employee and employee.id == linked_employee.id:
         return employee
 
     if not user_has_permission(actor, "attendance.*"):
+        if linked_employee:
+            raise PermissionDenied(f"You can only {action_name} for yourself.")        
         raise PermissionDenied(f"You do not have permission to {action_name} for others.")
 
     if payload.get("method") != AttendanceRecord.Method.MANUAL:
         raise PermissionDenied(
             f"Only manual {action_name} is allowed when acting on behalf of others."
         )
+    return employee
+
+
+def validate_employee_for_attendance(employee: Employee) -> Employee:
+    if not employee or not employee.pk or employee.is_deleted:
+        raise ValidationError({"employee": "Employee not found."})
     return employee
 
 
@@ -270,6 +297,8 @@ __all__ = [
     "parse_date_range",
     "perform_check_in",
     "perform_check_out",
+    "record_check_in",
+    "record_check_out",
     "perform_self_otp_verification",
     "reject_attendance",
     "request_self_attendance_otp",

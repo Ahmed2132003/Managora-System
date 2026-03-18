@@ -7,6 +7,7 @@ from hr.attendance.views import AttendanceViewSet, ShiftViewSet, WorkSiteViewSet
 
 router = DefaultRouter()
 router.register("attendance", AttendanceViewSet, basename="attendance")
+router.register("attendance-records", AttendanceViewSet, basename="attendance-record")
 router.register("shifts", ShiftViewSet, basename="shift")
 router.register("worksites", WorkSiteViewSet, basename="worksite")
 

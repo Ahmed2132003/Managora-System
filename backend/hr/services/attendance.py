@@ -257,9 +257,15 @@ def _resolve_qr_payload(payload: dict[str, Any], company) -> WorkSite:
     payload["worksite"] = stored.worksite
     return stored.worksite
 
-def check_in(user, employee_id: int, payload: dict[str, Any]) -> AttendanceRecord:
+def check_in(
+    user,
+    employee_id: int,
+    payload: dict[str, Any],
+    *,
+    timestamp: datetime | None = None,
+) -> AttendanceRecord:
     method = _ensure_method(payload)    
-    now = timezone.now()
+    now = timestamp or timezone.now()    
     record_date = timezone.localdate(now)
     
     employee = _get_employee(user, employee_id)
@@ -326,9 +332,15 @@ def check_in(user, employee_id: int, payload: dict[str, Any]) -> AttendanceRecor
     return existing_record
 
 
-def check_out(user, employee_id: int, payload: dict[str, Any]) -> AttendanceRecord:
+def check_out(
+    user,
+    employee_id: int,
+    payload: dict[str, Any],
+    *,
+    timestamp: datetime | None = None,
+) -> AttendanceRecord:
     method = _ensure_method(payload)
-    now = timezone.now()
+    now = timestamp or timezone.now()    
     record_date = timezone.localdate(now)
 
     employee = _get_employee(user, employee_id)

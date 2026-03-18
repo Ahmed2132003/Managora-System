@@ -60,12 +60,10 @@ class AttendanceViewSet(PermissionByActionMixin, viewsets.ModelViewSet):
         "retrieve": "attendance.*",
         "partial_update": "attendance.*",
         "destroy": "attendance.*",
-        "check_in": "attendance.*",
-        "check_out": "attendance.*",
         "pending": ["attendance.*", "approvals.*"],
         "approve": ["attendance.*", "approvals.*"],
         "reject": ["attendance.*", "approvals.*"],
-    }
+    }    
     http_method_names = ["get", "post", "patch", "delete", "head", "options"]
 
     def get_queryset(self):
