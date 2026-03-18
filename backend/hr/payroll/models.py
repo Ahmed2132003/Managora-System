@@ -276,6 +276,14 @@ class PayrollLine(BaseModel):
 
     class Meta:
         app_label = "hr"
+        indexes = [
+            models.Index(
+                fields=["payroll_run", "company"],
+                name="payline_run_comp_idx",
+                condition=Q(is_deleted=False),
+                include=["code", "type", "amount"],
+            ),
+        ]
 
     def save(self, *args, **kwargs):
         if self.payroll_run_id:

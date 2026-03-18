@@ -123,10 +123,27 @@ class LeaveRequest(BaseModel):
             ),
         ]
         indexes = [
-            models.Index(fields=["company", "status"], name="leave_req_comp_status_idx"),
+            models.Index(
+                fields=["company", "status"],
+                name="leave_req_comp_status_idx",
+                condition=Q(is_deleted=False),
+                include=["start_date", "employee", "requested_at"],
+            ),
             models.Index(
                 fields=["company", "employee", "start_date"],
                 name="leave_req_comp_emp_start_idx",
+            ),
+            models.Index(
+                fields=["employee", "status", "start_date"],
+                name="leave_req_emp_status_start_idx",
+                condition=Q(is_deleted=False),
+                include=["end_date", "leave_type", "requested_at"],
+            ),
+            models.Index(
+                fields=["employee", "start_date"],
+                name="leave_pending_idx",
+                condition=Q(is_deleted=False, status="pending"),
+                include=["end_date", "leave_type", "requested_at"],
             ),
         ]
 

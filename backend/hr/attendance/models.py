@@ -3,6 +3,7 @@ Attendance, shift, and worksite models.
 """
 from django.conf import settings
 from django.db import models
+from django.db.models import Q
 from django.utils import timezone
 
 from hr.models.base import BaseModel
@@ -116,10 +117,17 @@ class AttendanceRecord(BaseModel):
             ),
         ]
         indexes = [
-            models.Index(fields=["company", "date"], name="attendance_comp_date_idx"),
             models.Index(
                 fields=["company", "employee", "date"],
                 name="attendance_comp_emp_date_idx",
+                condition=Q(is_deleted=False),
+                include=["status", "check_in_time", "check_out_time"],
+            ),
+            models.Index(
+                fields=["company", "-date"],
+                name="attendance_comp_date_desc_idx",
+                condition=Q(is_deleted=False),
+                include=["employee", "status", "check_in_time"],
             ),
         ]
 

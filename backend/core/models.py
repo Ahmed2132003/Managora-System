@@ -280,6 +280,15 @@ class AuditLog(models.Model):
     user_agent = models.TextField(blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
+    class Meta:
+        indexes = [
+            models.Index(
+                fields=["company", "-created_at"],
+                name="audit_comp_created_desc_idx",
+                include=["actor", "action", "entity", "entity_id"],
+            ),
+        ]
+
     def __str__(self):
         return f"{self.company.name} - {self.action} - {self.entity}:{self.entity_id}"
 
