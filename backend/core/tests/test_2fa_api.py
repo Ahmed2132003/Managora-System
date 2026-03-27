@@ -21,12 +21,13 @@ User = get_user_model()
         "DEFAULT_THROTTLE_RATES": {
             "analytics": "120/min",
             "login": "5/min",
-            "otp_verify": "5/min",
-            "attendance_checkin": "10/min",
-            "file_upload": "20/min",
+            "user": "100/min",
+            "otp": "5/min",
+            "attendance": "10/min",
+            "upload": "20/min",
             "copilot": "30/min",
             "export": "30/min",
-        },
+        },        
     }
 )
 class TwoFactorApiTests(APITestCase):

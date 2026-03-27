@@ -138,16 +138,14 @@ REST_FRAMEWORK = {
     "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
     "DEFAULT_THROTTLE_CLASSES": (
         "rest_framework.throttling.UserRateThrottle",
-        "rest_framework.throttling.AnonRateThrottle",
     ),
     "DEFAULT_THROTTLE_RATES": {
-        "user": "1000/min",
-        "anon": "200/min",
+        "user": "5/min",
         "analytics": "120/min",
         "login": "5/min",
-        "otp_verify": "5/min",        
-        "attendance_checkin": "10/min",
-        "file_upload": "20/min",
+        "otp": "3/min",
+        "attendance": "3/min",
+        "upload": "2/min",
         "copilot": "30/min",
         "export": "30/min",
     },
@@ -158,16 +156,15 @@ if TESTING:
     # unrelated tests from tripping strict production limits.
     REST_FRAMEWORK["DEFAULT_THROTTLE_RATES"] = {
         "user": "10000/min",
-        "anon": "10000/min",
         "analytics": "10000/min",
         "login": "10000/min",        
-        "otp_verify": "10000/min",
-        "attendance_checkin": "10000/min",
-        "file_upload": "10000/min",
+        "otp": "10000/min",
+        "attendance": "10000/min",
+        "upload": "10000/min",
         "copilot": "10000/min",
         "export": "10000/min",
     }
-    
+        
 SIMPLE_JWT = {
     "ACCESS_TOKEN_LIFETIME": timedelta(minutes=15),
     "REFRESH_TOKEN_LIFETIME": timedelta(days=7),

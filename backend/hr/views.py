@@ -21,6 +21,7 @@ from rest_framework.generics import (
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.renderers import BaseRenderer
 from rest_framework.response import Response
+from rest_framework.throttling import ScopedRateThrottle
 from rest_framework.views import APIView
 
 from core.models import User
@@ -29,7 +30,6 @@ from core.permissions import (
     PermissionByActionMixin,
     user_has_permission,
 )
-from core.throttles import FileUploadRateThrottle
 from core.tenancy import CompanyScopedViewSet
 from hr.models import (
     AttendanceRecord,
@@ -455,8 +455,9 @@ class EmployeeDefaultsView(APIView):
 )
 class EmployeeDocumentListCreateView(ListCreateAPIView):
     permission_classes = [IsAuthenticated]
-    throttle_classes = [FileUploadRateThrottle]
-    
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "upload"
+        
     def get_employee(self):
         employee = get_object_or_404(Employee.all_objects, pk=self.kwargs["employee_id"])
         if employee.company_id != self.request.user.company_id:
@@ -502,6 +503,10 @@ class EmployeeDocumentListCreateView(ListCreateAPIView):
         context["employee"] = self.get_employee()
         return context
 
+    def create(self, request, *args, **kwargs):
+        self.check_throttles(request)
+        return super().create(request, *args, **kwargs)
+
 
 @extend_schema(
     tags=["Employee Documents"],
@@ -509,8 +514,9 @@ class EmployeeDocumentListCreateView(ListCreateAPIView):
 )
 class MyEmployeeDocumentListCreateView(ListCreateAPIView):
     permission_classes = [IsAuthenticated]
-    throttle_classes = [FileUploadRateThrottle]
-    
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "upload"
+        
     def get_employee(self):
         employee = getattr(self.request.user, "employee_profile", None)
         if not employee or employee.company_id != self.request.user.company_id:
@@ -545,6 +551,10 @@ class MyEmployeeDocumentListCreateView(ListCreateAPIView):
         context = super().get_serializer_context()
         context["employee"] = self.get_employee()
         return context
+
+    def create(self, request, *args, **kwargs):
+        self.check_throttles(request)
+        return super().create(request, *args, **kwargs)
 
 
 @extend_schema(
