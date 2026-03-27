@@ -2,7 +2,7 @@ from datetime import timedelta
 from io import BytesIO
 
 from django.db.models import Q
-from django.http import FileResponse, Http404
+from django.http import Http404
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from django.conf import settings
@@ -29,6 +29,8 @@ from core.permissions import (
     PermissionByActionMixin,
     user_has_permission,
 )
+from core.throttles import FileUploadRateThrottle
+from core.tenancy import CompanyScopedViewSet
 from hr.models import (
     AttendanceRecord,
     Department,
@@ -111,7 +113,7 @@ import re
     partial_update=extend_schema(tags=["Departments"], summary="Update department"),
     destroy=extend_schema(tags=["Departments"], summary="Delete department"),
 )
-class DepartmentViewSet(PermissionByActionMixin, viewsets.ModelViewSet):
+class DepartmentViewSet(PermissionByActionMixin, CompanyScopedViewSet):    
     serializer_class = DepartmentSerializer
     permission_classes = [IsAuthenticated]
     permission_map = {
@@ -122,12 +124,7 @@ class DepartmentViewSet(PermissionByActionMixin, viewsets.ModelViewSet):
         "destroy": "hr.departments.delete",
     }
 
-    def get_queryset(self):
-        return Department.objects.filter(company=self.request.user.company)
-
-    def perform_create(self, serializer):
-        serializer.save(company=self.request.user.company)
-
+    queryset = Department.objects.all()
 
 @extend_schema_view(
     list=extend_schema(tags=["Job Titles"], summary="List job titles"),
@@ -136,7 +133,8 @@ class DepartmentViewSet(PermissionByActionMixin, viewsets.ModelViewSet):
     partial_update=extend_schema(tags=["Job Titles"], summary="Update job title"),
     destroy=extend_schema(tags=["Job Titles"], summary="Delete job title"),
 )
-class JobTitleViewSet(PermissionByActionMixin, viewsets.ModelViewSet):
+
+class JobTitleViewSet(PermissionByActionMixin, CompanyScopedViewSet):    
     serializer_class = JobTitleSerializer
     permission_classes = [IsAuthenticated]
     permission_map = {
@@ -147,12 +145,8 @@ class JobTitleViewSet(PermissionByActionMixin, viewsets.ModelViewSet):
         "destroy": "hr.job_titles.delete",
     }
 
-    def get_queryset(self):
-        return JobTitle.objects.filter(company=self.request.user.company)
-
-    def perform_create(self, serializer):
-        serializer.save(company=self.request.user.company)
-
+    queryset = JobTitle.objects.all()
+    
 
 
 
@@ -174,7 +168,7 @@ def _is_manager_or_hr(user):
     partial_update=extend_schema(tags=["Shifts"], summary="Update shift"),
     destroy=extend_schema(tags=["Shifts"], summary="Delete shift"),
 )
-class ShiftViewSet(PermissionByActionMixin, viewsets.ModelViewSet):
+class ShiftViewSet(PermissionByActionMixin, CompanyScopedViewSet):    
     serializer_class = ShiftSerializer
     permission_classes = [IsAuthenticated]
     permission_map = {
@@ -185,9 +179,8 @@ class ShiftViewSet(PermissionByActionMixin, viewsets.ModelViewSet):
         "destroy": "hr.shifts.delete",
     }
 
-    def get_queryset(self):
-        return Shift.objects.filter(company=self.request.user.company)
-
+    queryset = Shift.objects.all()
+    
     def perform_create(self, serializer):
         if not _is_manager_or_hr(self.request.user):
             raise PermissionDenied("Only manager or HR can manage shifts.")
@@ -211,7 +204,7 @@ class ShiftViewSet(PermissionByActionMixin, viewsets.ModelViewSet):
     partial_update=extend_schema(tags=["Worksites"], summary="Update worksite"),
     destroy=extend_schema(tags=["Worksites"], summary="Delete worksite"),
 )
-class WorkSiteViewSet(PermissionByActionMixin, viewsets.ModelViewSet):
+class WorkSiteViewSet(PermissionByActionMixin, CompanyScopedViewSet):    
     serializer_class = WorkSiteSerializer
     permission_classes = [IsAuthenticated]
     permission_map = {
@@ -222,9 +215,8 @@ class WorkSiteViewSet(PermissionByActionMixin, viewsets.ModelViewSet):
         "destroy": "hr.worksites.delete",
     }
 
-    def get_queryset(self):
-        return WorkSite.objects.filter(company=self.request.user.company)
-
+    queryset = WorkSite.objects.all()
+    
     def perform_create(self, serializer):
         if not _is_manager_or_hr(self.request.user):
             raise PermissionDenied("Only manager or HR can manage worksites.")
@@ -248,7 +240,7 @@ class WorkSiteViewSet(PermissionByActionMixin, viewsets.ModelViewSet):
     partial_update=extend_schema(tags=["Employees"], summary="Update employee"),
     destroy=extend_schema(tags=["Employees"], summary="Delete employee"),
 )
-class EmployeeViewSet(PermissionByActionMixin, viewsets.ModelViewSet):
+class EmployeeViewSet(PermissionByActionMixin, CompanyScopedViewSet):    
     permission_classes = [IsAuthenticated]
     filter_backends = [filters.SearchFilter, filters.OrderingFilter]
     search_fields = ["full_name", "employee_code", "national_id"]
@@ -262,11 +254,8 @@ class EmployeeViewSet(PermissionByActionMixin, viewsets.ModelViewSet):
     }
 
     def get_queryset(self):
-        queryset = (
-            Employee.objects.select_related("department", "job_title", "manager")
-            .filter(company=self.request.user.company)
-        )
-
+        queryset = super().get_queryset().select_related("department", "job_title", "manager")
+        
         status_filter = self.request.query_params.get("status")
         department = self.request.query_params.get("department")
         job_title = self.request.query_params.get("job_title")
@@ -280,6 +269,8 @@ class EmployeeViewSet(PermissionByActionMixin, viewsets.ModelViewSet):
 
         return queryset.order_by("id")
 
+    queryset = Employee.objects.all()
+    
     def get_serializer_class(self):
         if self.action in {"create", "partial_update"}:
             return EmployeeCreateUpdateSerializer
@@ -295,7 +286,7 @@ class EmployeeViewSet(PermissionByActionMixin, viewsets.ModelViewSet):
     partial_update=extend_schema(tags=["Payroll"], summary="Update salary structure"),
     destroy=extend_schema(tags=["Payroll"], summary="Delete salary structure"),
 )
-class SalaryStructureViewSet(PermissionByActionMixin, viewsets.ModelViewSet):
+class SalaryStructureViewSet(PermissionByActionMixin, CompanyScopedViewSet):    
     serializer_class = SalaryStructureSerializer
     permission_classes = [IsAuthenticated]
     permission_map = {
@@ -307,15 +298,14 @@ class SalaryStructureViewSet(PermissionByActionMixin, viewsets.ModelViewSet):
     }
 
     def get_queryset(self):
-        queryset = SalaryStructure.objects.select_related("employee").filter(
-            company=self.request.user.company
-        )
+        queryset = super().get_queryset().select_related("employee")        
         employee_id = self.request.query_params.get("employee")
         if employee_id:
             queryset = queryset.filter(employee_id=employee_id)
         return queryset.order_by("id")
 
-
+    queryset = SalaryStructure.objects.all()
+    
 @extend_schema_view(
     list=extend_schema(tags=["Payroll"], summary="List salary components"),
     retrieve=extend_schema(tags=["Payroll"], summary="Retrieve salary component"),
@@ -323,7 +313,8 @@ class SalaryStructureViewSet(PermissionByActionMixin, viewsets.ModelViewSet):
     partial_update=extend_schema(tags=["Payroll"], summary="Update salary component"),
     destroy=extend_schema(tags=["Payroll"], summary="Delete salary component"),
 )
-class SalaryComponentViewSet(PermissionByActionMixin, viewsets.ModelViewSet):
+
+class SalaryComponentViewSet(PermissionByActionMixin, CompanyScopedViewSet):    
     serializer_class = SalaryComponentSerializer
     permission_classes = [IsAuthenticated]
     permission_map = {
@@ -337,7 +328,7 @@ class SalaryComponentViewSet(PermissionByActionMixin, viewsets.ModelViewSet):
     def get_queryset(self):
         queryset = SalaryComponent.objects.select_related(
             "salary_structure", "salary_structure__employee"
-        ).filter(company=self.request.user.company)
+        ).filter(company=self._current_company())        
         salary_structure_id = self.request.query_params.get("salary_structure")
         employee_id = self.request.query_params.get("employee")
         if salary_structure_id:
@@ -349,6 +340,8 @@ class SalaryComponentViewSet(PermissionByActionMixin, viewsets.ModelViewSet):
         )
         return queryset.order_by("id")
 
+    queryset = SalaryComponent.objects.all()
+    
     def perform_create(self, serializer):
         salary_structure = serializer.validated_data.get("salary_structure")
         if salary_structure:
@@ -371,7 +364,7 @@ class SalaryComponentViewSet(PermissionByActionMixin, viewsets.ModelViewSet):
     partial_update=extend_schema(tags=["Payroll"], summary="Update loan advance"),
     destroy=extend_schema(tags=["Payroll"], summary="Delete loan advance"),
 )
-class LoanAdvanceViewSet(PermissionByActionMixin, viewsets.ModelViewSet):
+class LoanAdvanceViewSet(PermissionByActionMixin, CompanyScopedViewSet):    
     serializer_class = LoanAdvanceSerializer
     permission_classes = [IsAuthenticated]
     permission_map = {
@@ -383,9 +376,8 @@ class LoanAdvanceViewSet(PermissionByActionMixin, viewsets.ModelViewSet):
     }
 
     def get_queryset(self):
-        queryset = LoanAdvance.objects.select_related("employee").filter(
-            company=self.request.user.company
-        )
+        queryset = super().get_queryset().select_related("employee")
+                
         employee_id = self.request.query_params.get("employee")
         status_filter = self.request.query_params.get("status")
         if employee_id:
@@ -396,6 +388,7 @@ class LoanAdvanceViewSet(PermissionByActionMixin, viewsets.ModelViewSet):
             self.request.user, queryset, "employee"
         )
         return queryset.order_by("id")
+    queryset = LoanAdvance.objects.all()
 
     def perform_create(self, serializer):
         employee = serializer.validated_data.get("employee")
@@ -462,7 +455,8 @@ class EmployeeDefaultsView(APIView):
 )
 class EmployeeDocumentListCreateView(ListCreateAPIView):
     permission_classes = [IsAuthenticated]
-
+    throttle_classes = [FileUploadRateThrottle]
+    
     def get_employee(self):
         employee = get_object_or_404(Employee.all_objects, pk=self.kwargs["employee_id"])
         if employee.company_id != self.request.user.company_id:
@@ -515,7 +509,8 @@ class EmployeeDocumentListCreateView(ListCreateAPIView):
 )
 class MyEmployeeDocumentListCreateView(ListCreateAPIView):
     permission_classes = [IsAuthenticated]
-
+    throttle_classes = [FileUploadRateThrottle]
+    
     def get_employee(self):
         employee = getattr(self.request.user, "employee_profile", None)
         if not employee or employee.company_id != self.request.user.company_id:
@@ -572,8 +567,14 @@ class EmployeeDocumentDownloadView(APIView):
         is_owner = employee and employee.id == document.employee_id
         if not has_document_access and not is_owner:
             raise PermissionDenied("You do not have permission to download this document.")
-        return FileResponse(document.file.open("rb"), as_attachment=True)
-
+        storage = document.file.storage
+        expiry = getattr(settings, "AWS_QUERYSTRING_EXPIRE", 300)
+        try:
+            signed_url = storage.url(document.file.name, expire=expiry)
+        except TypeError:
+            signed_url = storage.url(document.file.name)
+        return Response({"download_url": signed_url, "expires_in": expiry})
+    
 
 @extend_schema(
     tags=["Employee Documents"],
@@ -1233,7 +1234,7 @@ class HRActionViewSet(
     partial_update=extend_schema(tags=["Leaves"], summary="Update leave type"),
     destroy=extend_schema(tags=["Leaves"], summary="Delete leave type"),
 )
-class LeaveTypeViewSet(viewsets.ModelViewSet):
+class LeaveTypeViewSet(CompanyScopedViewSet):    
     serializer_class = LeaveTypeSerializer
     permission_classes = [IsAuthenticated]
 
@@ -1244,24 +1245,19 @@ class LeaveTypeViewSet(viewsets.ModelViewSet):
         return permissions
 
     def get_queryset(self):
-        queryset = LeaveType.objects.filter(company=self.request.user.company)
+        queryset = super().get_queryset()
+                
         if not user_has_permission(self.request.user, "leaves.*"):
             queryset = queryset.filter(is_active=True)
-        return queryset.order_by("name")
-
-    def perform_create(self, serializer):
-        serializer.save(company=self.request.user.company)
-
-    def perform_update(self, serializer):
-        serializer.save(company=self.request.user.company)
-
+    queryset = LeaveType.objects.all()
+    
 
 @extend_schema_view(
     list=extend_schema(tags=["Leaves"], summary="List leave balances"),
     create=extend_schema(tags=["Leaves"], summary="Create leave balance"),
     partial_update=extend_schema(tags=["Leaves"], summary="Update leave balance"),
 )
-class LeaveBalanceViewSet(viewsets.ModelViewSet):
+class LeaveBalanceViewSet(CompanyScopedViewSet):    
     serializer_class = LeaveBalanceSerializer
     permission_classes = [IsAuthenticated]
     http_method_names = ["get", "post", "patch", "head", "options"]
@@ -1272,10 +1268,8 @@ class LeaveBalanceViewSet(viewsets.ModelViewSet):
         return permissions
 
     def get_queryset(self):
-        return (
-            LeaveBalance.objects.select_related("employee", "leave_type")
-            .filter(company=self.request.user.company)
-            .order_by("-year", "employee__id")
+        return super().get_queryset().select_related("employee", "leave_type").order_by(
+            "-year", "employee__id"            
         )
 
     def get_serializer_context(self):
@@ -1310,9 +1304,7 @@ class LeaveBalanceViewSet(viewsets.ModelViewSet):
         headers = self.get_success_headers(serializer.data)
         return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
 
-    def perform_create(self, serializer):
-        serializer.save(company=self.request.user.company)
-
+    queryset = LeaveBalance.objects.all()
 
 @extend_schema(
     tags=["Leaves"],

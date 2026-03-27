@@ -216,6 +216,9 @@ class UserManager(BaseUserManager):
 
 class User(AbstractUser):
     phone_number = models.CharField(max_length=32, blank=True, default="")
+    is_2fa_enabled = models.BooleanField(default=False)
+    otp_secret = models.TextField(blank=True, default="")
+    backup_codes = models.JSONField(default=list, blank=True)
     company = models.ForeignKey(
         "core.Company",
         on_delete=models.PROTECT,

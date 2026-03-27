@@ -1,5 +1,7 @@
 from pathlib import Path
 import os
+import importlib.util
+
 from datetime import timedelta
 
 from celery.schedules import crontab
@@ -10,9 +12,11 @@ SECRET_KEY = os.getenv("SECRET_KEY", "dev-secret-key-change-me")
 # Optional: urlsafe_b64 Fernet key (32 bytes) for encrypting company email app passwords
 ATTENDANCE_EMAIL_ENCRYPTION_KEY = os.getenv("ATTENDANCE_EMAIL_ENCRYPTION_KEY", "") or None
 ATTENDANCE_OTP_SENDER_EMAIL = os.getenv("ATTENDANCE_OTP_SENDER_EMAIL", "") or None
-ATTENDANCE_OTP_APP_PASSWORD = os.getenv("ATTENDANCE_OTP_APP_PASSWORD", "") or None
 ATTENDANCE_OTP_SMTP_HOST = os.getenv("ATTENDANCE_OTP_SMTP_HOST", "smtp.gmail.com")
 ATTENDANCE_OTP_SMTP_PORT = int(os.getenv("ATTENDANCE_OTP_SMTP_PORT", "587"))
+TWO_FA_ENCRYPTION_KEY = os.getenv("TWO_FA_ENCRYPTION_KEY", "") or None
+TWO_FA_ISSUER_NAME = os.getenv("TWO_FA_ISSUER_NAME", "Managora")
+NOTIFICATIONS_EMAIL_ENABLED = os.getenv("NOTIFICATIONS_EMAIL_ENABLED", "1") == "1"
 NOTIFICATIONS_EMAIL_ENABLED = os.getenv("NOTIFICATIONS_EMAIL_ENABLED", "1") == "1"
 DEFAULT_FROM_EMAIL = os.getenv("DEFAULT_FROM_EMAIL", "no-reply@managora.local")
 DEBUG = os.getenv("DEBUG", "1") == "1"
@@ -42,7 +46,9 @@ INSTALLED_APPS = [
     "accounting.apps.AccountingConfig",
     "analytics.apps.AnalyticsConfig",
 ]
-
+if importlib.util.find_spec("storages") is not None:
+    INSTALLED_APPS.append("storages")
+    
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
@@ -128,7 +134,10 @@ REST_FRAMEWORK = {
     "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
     "DEFAULT_THROTTLE_RATES": {
         "analytics": "120/min",
-        "login": "1000/min",                      
+        "login": "5/min",
+        "otp_verify": "5/min",
+        "attendance_checkin": "10/min",
+        "file_upload": "20/min",
         "copilot": "30/min",
         "export": "30/min",
     },
@@ -180,6 +189,21 @@ CACHES = {
 }
 CACHE_TTL = int(os.getenv("CACHE_TTL", "60"))
 
+# Secure file storage (Amazon S3)
+AWS_ACCESS_KEY_ID = os.getenv("AWS_ACCESS_KEY_ID", "")
+AWS_SECRET_ACCESS_KEY = os.getenv("AWS_SECRET_ACCESS_KEY", "")
+AWS_STORAGE_BUCKET_NAME = os.getenv("AWS_STORAGE_BUCKET_NAME", "")
+AWS_S3_REGION_NAME = os.getenv("AWS_S3_REGION_NAME", "")
+AWS_S3_SIGNATURE_VERSION = "s3v4"
+AWS_QUERYSTRING_AUTH = True
+AWS_QUERYSTRING_EXPIRE = int(os.getenv("AWS_QUERYSTRING_EXPIRE", "300"))
+AWS_DEFAULT_ACL = None
+AWS_S3_FILE_OVERWRITE = False
+AWS_S3_OBJECT_PARAMETERS = {"ServerSideEncryption": "AES256"}
+USE_S3_MEDIA_STORAGE = os.getenv("USE_S3_MEDIA_STORAGE", "0") == "1"
+if USE_S3_MEDIA_STORAGE and AWS_STORAGE_BUCKET_NAME:
+    DEFAULT_FILE_STORAGE = "storages.backends.s3boto3.S3Boto3Storage"
+    
 # Celery
 CELERY_BROKER_URL = os.getenv("CELERY_BROKER_URL", "redis://localhost:6379/0")
 CELERY_RESULT_BACKEND = os.getenv("CELERY_RESULT_BACKEND", CELERY_BROKER_URL)

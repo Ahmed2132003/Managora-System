@@ -56,6 +56,14 @@ from hr.models import (
 )
 
 User = get_user_model()
+ALLOWED_DOCUMENT_CONTENT_TYPES = {
+    "application/pdf",
+    "image/jpeg",
+    "image/png",
+    "text/plain",
+}
+ALLOWED_DOCUMENT_EXTENSIONS = {".pdf", ".jpg", ".jpeg", ".png", ".txt"}
+MAX_DOCUMENT_SIZE_BYTES = 10 * 1024 * 1024
 
 
 class DepartmentSerializer(serializers.ModelSerializer):
@@ -333,19 +341,31 @@ class EmployeeDocumentCreateSerializer(serializers.ModelSerializer):
     def validate(self, attrs):
         request = self.context.get("request")
         employee = self.context.get("employee")
+        file_obj = attrs.get("file")
         if not request or not employee:
             return attrs
 
         if employee.company_id != request.user.company_id:
-            raise serializers.ValidationError(
+            raise serializers.ValidationError(                
                 {"employee": "Employee must belong to the same company."}
             )
         if employee.is_deleted:
             raise serializers.ValidationError(
                 {"employee": "Cannot upload documents for deleted employee."}
             )
+        if not file_obj:
+            raise serializers.ValidationError({"file": "file is required."})
+        filename = (getattr(file_obj, "name", "") or "").lower()
+        ext = f".{filename.rsplit('.', 1)[-1]}" if "." in filename else ""
+        content_type = (getattr(file_obj, "content_type", "") or "").lower()
+        if ext not in ALLOWED_DOCUMENT_EXTENSIONS or content_type not in ALLOWED_DOCUMENT_CONTENT_TYPES:
+            raise serializers.ValidationError({"file": "Unsupported file type."})
+        if filename.endswith((".exe", ".sh", ".bat", ".cmd", ".msi", ".js", ".php")):
+            raise serializers.ValidationError({"file": "Executable files are not allowed."})
+        if file_obj.size > MAX_DOCUMENT_SIZE_BYTES:
+            raise serializers.ValidationError({"file": "File exceeds 10 MB limit."})
         return attrs
-
+    
     def create(self, validated_data):
         request = self.context.get("request")
         employee = self.context.get("employee")

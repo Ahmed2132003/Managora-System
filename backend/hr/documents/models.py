@@ -1,14 +1,19 @@
 """
 Employee document models.
 """
+import os
+import uuid
+
 from django.conf import settings
 from django.db import models
 from hr.models.base import BaseModel
 
 
 def employee_document_upload_to(instance, filename):
+    ext = os.path.splitext(filename)[1].lower()
+    safe_name = f"{uuid.uuid4().hex}{ext}"
     return (
-        f"companies/{instance.company_id}/employees/{instance.employee_id}/documents/{filename}"
+        f"company_{instance.company_id}/employees/{instance.employee_id}/documents/{safe_name}"
     )
 
 

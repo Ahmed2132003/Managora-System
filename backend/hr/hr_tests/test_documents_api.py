@@ -209,7 +209,9 @@ class EmployeeDocumentApiTests(APITestCase):
         )
         res = self.client.get(download_url)
         self.assertEqual(res.status_code, status.HTTP_200_OK)
-
+        self.assertIn("download_url", res.data)
+        self.assertIn("expires_in", res.data)
+        
         self.auth("other")
         res = self.client.get(download_url)
         self.assertEqual(res.status_code, status.HTTP_404_NOT_FOUND)
@@ -235,7 +237,22 @@ class EmployeeDocumentApiTests(APITestCase):
         download_url = reverse("employee-document-download", kwargs={"pk": document.id})
         download_res = self.client.get(download_url)
         self.assertEqual(download_res.status_code, status.HTTP_200_OK)
-
+        self.assertIn("download_url", download_res.data)
+        
         delete_url = reverse("employee-document-delete", kwargs={"pk": document.id})
         delete_res = self.client.delete(delete_url)
         self.assertEqual(delete_res.status_code, status.HTTP_204_NO_CONTENT)
+
+    @override_settings(AWS_QUERYSTRING_EXPIRE=60)
+    def test_download_returns_expiring_signed_url_metadata(self):
+        document = EmployeeDocument.objects.create(
+            company=self.c1,
+            employee=self.employee,
+            doc_type=EmployeeDocument.DocumentType.ID,
+            file=SimpleUploadedFile("id.pdf", b"id-content", content_type="application/pdf"),
+            uploaded_by=self.hr_user,
+        )
+        self.auth("manager")
+        res = self.client.get(reverse("employee-document-download", kwargs={"pk": document.id}))
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertEqual(res.data["expires_in"], 60)

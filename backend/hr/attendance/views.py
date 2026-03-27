@@ -4,13 +4,16 @@ from __future__ import annotations
 
 from django.utils.dateparse import parse_date
 from drf_spectacular.utils import extend_schema, extend_schema_view
-from rest_framework import status, viewsets
+from rest_framework import status
 from rest_framework.decorators import action
 from rest_framework.exceptions import ValidationError
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
 from core.permissions import PermissionByActionMixin
+from core.throttles import AttendanceCheckinRateThrottle
+from core.tenancy import CompanyScopedViewSet
+from hr.models import AttendanceRecord
 from hr.attendance.serializers import (
     AttendanceActionSerializer,
     AttendanceApprovalDecisionSerializer,
@@ -52,7 +55,7 @@ def _parse_date_param(value, label):
     partial_update=extend_schema(tags=["Attendance"], summary="Partially update attendance record"),
     destroy=extend_schema(tags=["Attendance"], summary="Delete attendance record"),
 )
-class AttendanceViewSet(PermissionByActionMixin, viewsets.ModelViewSet):
+class AttendanceViewSet(PermissionByActionMixin, CompanyScopedViewSet):    
     serializer_class = AttendanceRecordSerializer
     permission_classes = [IsAuthenticated]
     permission_map = {
@@ -65,7 +68,8 @@ class AttendanceViewSet(PermissionByActionMixin, viewsets.ModelViewSet):
         "reject": ["attendance.*", "approvals.*"],
     }    
     http_method_names = ["get", "post", "patch", "delete", "head", "options"]
-
+    queryset = AttendanceRecord.objects.all()
+    
     def get_queryset(self):
         if self.action == "mine":
             date_from = _parse_date_param(self.request.query_params.get("date_from"), "date_from")
@@ -107,7 +111,7 @@ class AttendanceViewSet(PermissionByActionMixin, viewsets.ModelViewSet):
         request=AttendanceActionSerializer,
         responses={201: AttendanceRecordSerializer},
     )
-    @action(detail=False, methods=["post"], url_path="check-in")
+    @action(detail=False, methods=["post"], url_path="check-in", throttle_classes=[AttendanceCheckinRateThrottle])    
     def check_in(self, request):
         serializer = AttendanceActionSerializer(data=request.data, context={"request": request})
         serializer.is_valid(raise_exception=True)

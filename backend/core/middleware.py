@@ -8,6 +8,7 @@ from django.shortcuts import render
 from django.utils.deprecation import MiddlewareMixin
 
 from core.audit import clear_audit_context, get_client_ip, set_audit_context
+from core.models import Company
 
 logger = logging.getLogger("managora.request")
 
@@ -22,10 +23,11 @@ class AuditContextMiddleware(MiddlewareMixin):
         request.request_id = request.META.get("HTTP_X_REQUEST_ID") or str(uuid.uuid4())
         
         user = getattr(request, "user", None)
+        request.company = None
         if user and getattr(user, "is_authenticated", False):
             # Determine the active company for this request.
             company_id = getattr(user, "company_id", None)
-
+            
             # Optional: allow superuser to override for debugging via header
             # Example header: X-Company-ID: 7
             if getattr(user, "is_superuser", False):
@@ -37,9 +39,11 @@ class AuditContextMiddleware(MiddlewareMixin):
                         pass
 
             request.company_id = company_id
+            if company_id:
+                request.company = Company.objects.filter(id=company_id).first()
         else:
             request.company_id = None
-
+            
         # Helpful for downstream usage (optional)
         request.actor_id = getattr(user, "id", None) if user and getattr(user, "is_authenticated", False) else None
 

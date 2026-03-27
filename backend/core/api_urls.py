@@ -3,6 +3,13 @@ from rest_framework.routers import DefaultRouter
 from rest_framework_simplejwt.views import TokenRefreshView
 
 from core.api_views.auth import LoginView
+from core.api_views.two_factor import (
+    TwoFABackupCodesView,
+    TwoFADisableView,
+    TwoFALoginVerifyView,
+    TwoFASetupView,
+    TwoFAVerifyView,
+)
 from core.api_views.backups import BackupDownloadView, BackupListCreateView, BackupRestoreView
 from core.api_views.audit import AuditLogListView
 from core.api_views.copilot import CopilotQueryView
@@ -34,8 +41,12 @@ urlpatterns = [
     path("", include(router.urls)),
     # Auth
     path("auth/login/", LoginView.as_view(), name="token_obtain_pair"),
+    path("auth/login/2fa/", TwoFALoginVerifyView.as_view(), name="token_obtain_pair_2fa"),
     path("auth/refresh/", TokenRefreshView.as_view(), name="token_refresh"),
-    
+    path("auth/2fa/setup/", TwoFASetupView.as_view(), name="auth-2fa-setup"),
+    path("auth/2fa/verify/", TwoFAVerifyView.as_view(), name="auth-2fa-verify"),
+    path("auth/2fa/disable/", TwoFADisableView.as_view(), name="auth-2fa-disable"),
+    path("auth/2fa/backup-codes/", TwoFABackupCodesView.as_view(), name="auth-2fa-backup-codes"),    
     # Me
     path("me/", MeView.as_view(), name="me"),
 

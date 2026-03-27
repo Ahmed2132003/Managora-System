@@ -4,6 +4,7 @@ Kept in a single place so that migrations and FKs stay under app_label 'hr'.
 """
 from django.db import models
 from django.utils import timezone
+from core.tenancy import CompanyScopedManager, CompanyScopedModel
 
 
 class SoftDeleteQuerySet(models.QuerySet):
@@ -25,7 +26,7 @@ class SoftDeleteManager(models.Manager):
         return self.get_queryset().hard_delete()
 
 
-class BaseModel(models.Model):
+class BaseModel(CompanyScopedModel):    
     company = models.ForeignKey(
         "core.Company",
         on_delete=models.CASCADE,
@@ -36,9 +37,9 @@ class BaseModel(models.Model):
     is_deleted = models.BooleanField(default=False)
     deleted_at = models.DateTimeField(null=True, blank=True)
 
-    objects = SoftDeleteManager()
+    objects = SoftDeleteManager.from_queryset(SoftDeleteQuerySet)()
+    tenant_objects = CompanyScopedManager()
     all_objects = models.Manager()
-
     class Meta:
         abstract = True
 

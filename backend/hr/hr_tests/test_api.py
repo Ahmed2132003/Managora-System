@@ -160,7 +160,19 @@ class HrApiTests(APITestCase):
         names = [dep["name"] for dep in res.data]
         self.assertIn(self.department.name, names)
         self.assertNotIn(self.other_department.name, names)
-        
+
+    def test_cross_company_department_detail_returns_404(self):
+        self.auth("hr")
+        detail_url = reverse("department-detail", kwargs={"pk": self.other_department.id})
+        res = self.client.get(detail_url)
+        self.assertEqual(res.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_cross_company_employee_detail_returns_404(self):
+        self.auth("hr")
+        detail_url = reverse("employee-detail", kwargs={"pk": self.other_employee.id})
+        res = self.client.get(detail_url)
+        self.assertEqual(res.status_code, status.HTTP_404_NOT_FOUND)
+                
     def test_manager_can_create_employees(self):
         self.auth("manager")
         list_url = reverse("employee-list")

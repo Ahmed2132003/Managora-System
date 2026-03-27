@@ -5,6 +5,7 @@ Django and migrations resolve models via app_label 'hr'; this module ensures
 """
 from hr.models.base import (
     BaseModel,
+    CompanyScopedModel,
     SoftDeleteManager,
     SoftDeleteQuerySet,
 )
@@ -49,6 +50,7 @@ __all__ = [
     "AttendanceRecord",
     "BaseModel",
     "CommissionRequest",
+    "CompanyScopedModel",    
     "Department",
     "Employee",
     "EmployeeDocument",

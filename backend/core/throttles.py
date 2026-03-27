@@ -31,3 +31,27 @@ class CopilotRateThrottle(UserRateThrottle):
 
 class ExportRateThrottle(UserRateThrottle):
     scope = "export"
+
+
+class OtpVerifyRateThrottle(SimpleRateThrottle):
+    scope = "otp_verify"
+
+    def get_cache_key(self, request, view):
+        ident = self.get_ident(request) or "anonymous"
+        return self.cache_format % {"scope": self.scope, "ident": ident}
+
+
+class AttendanceCheckinRateThrottle(SimpleRateThrottle):
+    scope = "attendance_checkin"
+
+    def get_cache_key(self, request, view):
+        ident = self.get_ident(request) or "anonymous"
+        return self.cache_format % {"scope": self.scope, "ident": ident}
+
+
+class FileUploadRateThrottle(SimpleRateThrottle):
+    scope = "file_upload"
+
+    def get_cache_key(self, request, view):
+        ident = self.get_ident(request) or "anonymous"
+        return self.cache_format % {"scope": self.scope, "ident": ident}
