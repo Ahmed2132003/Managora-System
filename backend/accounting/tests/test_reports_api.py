@@ -9,6 +9,7 @@ from rest_framework.test import APITestCase
 from accounting.models import Account, Alert, Customer, Invoice, Payment
 from accounting.services.journal import post_journal_entry
 from core.models import Company, Permission, Role, RolePermission, UserRole
+from core.tests.helpers import create_permission
 
 User = get_user_model()
 
@@ -34,7 +35,7 @@ class ReportsApiTests(APITestCase):
         UserRole.objects.get_or_create(user=self.accountant, role=accountant_role)
         UserRole.objects.get_or_create(user=self.hr, role=hr_role)
 
-        permission = Permission.objects.create(code="accounting.reports.view", name="View reports")
+        permission = create_permission(code="accounting.reports.view", name="View reports")        
         RolePermission.objects.get_or_create(role=accountant_role, permission=permission)
         
         self.cash = Account.objects.create(

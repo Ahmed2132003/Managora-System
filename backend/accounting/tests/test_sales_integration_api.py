@@ -7,6 +7,7 @@ from rest_framework.test import APITestCase
 
 from accounting.models import Account, CatalogItem, CostCenter, Customer, Invoice
 from core.models import Company, Permission, Role, RolePermission, UserRole
+from core.tests.helpers import create_permission
 
 User = get_user_model()
 
@@ -19,7 +20,7 @@ class SalesIntegrationApiTests(APITestCase):
         role, _ = Role.objects.get_or_create(company=self.company, name="Seller")
         UserRole.objects.get_or_create(user=self.user, role=role)
         for code in ["invoices.*", "catalog.edit", "catalog.view", "customers.create", "customers.view"]:
-            permission = Permission.objects.create(code=code, name=code)
+            permission = create_permission(code=code, name=code)            
             RolePermission.objects.get_or_create(role=role, permission=permission)
             
         self.expense_account = Account.objects.create(company=self.company, code="5100", name="COGS", type=Account.Type.EXPENSE)

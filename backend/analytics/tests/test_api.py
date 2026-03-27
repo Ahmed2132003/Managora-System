@@ -9,6 +9,7 @@ from rest_framework.test import APITestCase
 
 from analytics.models import KPIContributionDaily, KPIDefinition, KPIFactDaily
 from core.models import Company, ExportLog, Permission, Role, RolePermission, UserRole
+from core.tests.helpers import create_permission
 
 User = get_user_model()
 
@@ -24,13 +25,13 @@ class AnalyticsAPITests(APITestCase):
         self.role, _ = Role.objects.get_or_create(company=self.company, name="Analytics")
         UserRole.objects.get_or_create(user=self.user, role=self.role)
 
-        self.permission_finance = Permission.objects.create(
+        self.permission_finance = create_permission(            
             code="analytics.view_finance", name="View Finance Analytics"
         )
-        self.permission_hr = Permission.objects.create(
+        self.permission_hr = create_permission(            
             code="analytics.view_hr", name="View HR Analytics"
         )
-        self.permission_ceo = Permission.objects.create(
+        self.permission_ceo = create_permission(            
             code="analytics.view_ceo", name="View CEO Analytics"
         )
         RolePermission.objects.get_or_create(role=self.role, permission=self.permission_finance)
@@ -267,7 +268,7 @@ class AnalyticsAPITests(APITestCase):
         self.assertEqual(res.status_code, status.HTTP_403_FORBIDDEN)
 
     def test_export_creates_log(self):
-        export_permission = Permission.objects.create(
+        export_permission = create_permission(            
             code="export.analytics", name="Export analytics"
         )
         RolePermission.objects.get_or_create(role=self.role, permission=export_permission)
@@ -323,7 +324,7 @@ class AnalyticsDashboardPermissionTests(APITestCase):
         res = self.client.get(url)
         self.assertEqual(res.status_code, status.HTTP_403_FORBIDDEN)
 
-        permission = Permission.objects.create(
+        permission = create_permission(            
             code="analytics.view_ceo", name="View CEO Analytics"
         )
         RolePermission.objects.get_or_create(role=self.role, permission=permission)

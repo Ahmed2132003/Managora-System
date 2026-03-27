@@ -5,6 +5,7 @@ from rest_framework.test import APITestCase
 
 from accounting.models import Customer
 from core.models import Company, Permission, Role, RolePermission, UserRole
+from core.tests.helpers import create_permission
 
 User = get_user_model()
 
@@ -24,7 +25,7 @@ class CustomerApiTests(APITestCase):
         UserRole.objects.get_or_create(user=self.user_a, role=self.role)
 
         self.permissions = {
-            code: Permission.objects.create(code=code, name=code)
+            code: create_permission(code=code, name=code)            
             for code in [
                 "customers.view",
                 "customers.create",

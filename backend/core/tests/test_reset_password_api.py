@@ -4,6 +4,7 @@ from rest_framework import status
 from rest_framework.test import APITestCase
 
 from core.models import Company, Permission, Role, RolePermission, UserRole
+from core.tests.helpers import create_permission
 
 User = get_user_model()
 
@@ -23,7 +24,7 @@ class ResetPasswordApiTests(APITestCase):
         UserRole.objects.get_or_create(user=self.manager, role=self.manager_role)
         UserRole.objects.get_or_create(user=self.hr, role=self.hr_role)
 
-        self.reset_perm = Permission.objects.create(
+        self.reset_perm = create_permission(            
             code="users.reset_password", name="Reset user passwords"
         )
         RolePermission.objects.get_or_create(role=self.manager_role, permission=self.reset_perm)

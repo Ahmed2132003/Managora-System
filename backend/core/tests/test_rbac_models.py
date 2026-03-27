@@ -1,6 +1,7 @@
 from django.test import TestCase
 
 from core.models import Company, Permission, Role, RolePermission, User, UserRole
+from core.tests.helpers import create_permission
 
 
 class RBACModelTests(TestCase):
@@ -12,7 +13,7 @@ class RBACModelTests(TestCase):
             password="testpass123",
             company=company,
         )
-        permission = Permission.objects.create(
+        permission = create_permission(            
             code="users.view",
             name="View users",
         )

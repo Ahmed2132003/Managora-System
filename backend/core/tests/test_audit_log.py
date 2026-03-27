@@ -4,6 +4,7 @@ from rest_framework import status
 from rest_framework.test import APITestCase
 
 from core.models import AuditLog, Company, Permission, Role, RolePermission, UserRole
+from core.tests.helpers import create_permission
 
 User = get_user_model()
 
@@ -21,8 +22,8 @@ class AuditLogTests(APITestCase):
         UserRole.objects.get_or_create(user=self.manager, role=self.manager_role)
 
         permissions = [
-            Permission.objects.create(code="users.create", name="Create users"),
-            Permission.objects.create(code="audit.view", name="View audit logs"),
+            create_permission(code="users.create", name="Create users"),
+            create_permission(code="audit.view", name="View audit logs"),            
         ]
         for permission in permissions:
             RolePermission.objects.get_or_create(role=self.manager_role, permission=permission)

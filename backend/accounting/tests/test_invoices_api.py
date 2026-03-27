@@ -9,6 +9,7 @@ from rest_framework.test import APITestCase
 from accounting.models import Account, AccountMapping, Customer, Invoice, InvoiceLine, JournalEntry
 from accounting.services.invoices import ensure_invoice_journal_entry
 from core.models import Company, Permission, Role, RolePermission, UserRole
+from core.tests.helpers import create_permission
 
 User = get_user_model()
 
@@ -25,7 +26,7 @@ class InvoiceApiTests(APITestCase):
         self.accountant_role, _ = Role.objects.get_or_create(company=self.company, name="Accountant")
         UserRole.objects.get_or_create(user=self.accountant, role=self.accountant_role)
 
-        permission = Permission.objects.create(code="invoices.*", name="invoices.*")
+        permission = create_permission(code="invoices.*", name="invoices.*")        
         RolePermission.objects.get_or_create(role=self.accountant_role, permission=permission)
         
         self.receivable = Account.objects.create(

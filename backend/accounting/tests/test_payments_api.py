@@ -7,6 +7,7 @@ from rest_framework.test import APITestCase
 
 from accounting.models import Account, AccountMapping, Customer, Invoice, JournalEntry, Payment
 from core.models import Company, Permission, Role, RolePermission, UserRole
+from core.tests.helpers import create_permission
 
 User = get_user_model()
 
@@ -22,7 +23,7 @@ class PaymentApiTests(APITestCase):
 
         role, _ = Role.objects.get_or_create(company=self.company, name="Accountant")
         UserRole.objects.get_or_create(user=self.accountant, role=role)
-        permission = Permission.objects.create(code="payments.*", name="payments.*")
+        permission = create_permission(code="payments.*", name="payments.*")        
         RolePermission.objects.get_or_create(role=role, permission=permission)        
 
         self.receivable = Account.objects.create(

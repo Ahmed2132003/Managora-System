@@ -7,6 +7,7 @@ from rest_framework.test import APIRequestFactory, force_authenticate
 from rest_framework.views import APIView
 
 from core.models import Company, Permission, Role, RolePermission, UserRole
+from core.tests.helpers import create_permission
 from core.permissions import HasPermission
 
 User = get_user_model()
@@ -44,7 +45,7 @@ class PermissionClassTests(TestCase):
         UserRole.objects.get_or_create(user=self.manager, role=self.manager_role)
         UserRole.objects.get_or_create(user=self.hr, role=self.hr_role)
 
-        self.permission = Permission.objects.create(
+        self.permission = create_permission(            
             code="users.create",
             name="Create users",
         )

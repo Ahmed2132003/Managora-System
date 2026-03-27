@@ -9,6 +9,7 @@ from rest_framework.test import APITestCase
 from analytics.models import AlertEvent, AlertRule, KPIFactDaily
 from analytics.tasks import detect_anomalies
 from core.models import Company, Permission, Role, RolePermission, UserRole
+from core.tests.helpers import create_permission
 
 User = get_user_model()
 
@@ -78,10 +79,10 @@ class AlertAPITests(APITestCase):
         self.role, _ = Role.objects.get_or_create(company=self.company, name="Alerts Viewer")
         UserRole.objects.get_or_create(user=self.user, role=self.role)
 
-        self.permission_view = Permission.objects.create(
+        self.permission_view = create_permission(            
             code="analytics.alerts.view", name="View Alerts"
         )
-        self.permission_manage = Permission.objects.create(
+        self.permission_manage = create_permission(            
             code="analytics.alerts.manage", name="Manage Alerts"
         )
         RolePermission.objects.get_or_create(role=self.role, permission=self.permission_view)

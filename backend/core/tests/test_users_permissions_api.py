@@ -4,6 +4,7 @@ from rest_framework import status
 from rest_framework.test import APITestCase
 
 from core.models import Company, Permission, Role, RolePermission, UserRole
+from core.tests.helpers import create_permission
 
 User = get_user_model()
 
@@ -28,11 +29,11 @@ class UsersPermissionsApiTests(APITestCase):
         UserRole.objects.get_or_create(user=self.hr, role=self.hr_role)
         
         # permissions rows
-        self.p_view = Permission.objects.create(code="users.view", name="View users")
-        self.p_create = Permission.objects.create(code="users.create", name="Create users")
-        self.p_edit = Permission.objects.create(code="users.edit", name="Edit users")
-        self.p_delete = Permission.objects.create(code="users.delete", name="Delete users")
-
+        self.p_view = create_permission(code="users.view", name="View users")
+        self.p_create = create_permission(code="users.create", name="Create users")
+        self.p_edit = create_permission(code="users.edit", name="Edit users")
+        self.p_delete = create_permission(code="users.delete", name="Delete users")
+        
         # manager has all
         RolePermission.objects.get_or_create(role=self.manager_role, permission=self.p_view)
         RolePermission.objects.get_or_create(role=self.manager_role, permission=self.p_create)

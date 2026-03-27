@@ -7,6 +7,7 @@ from rest_framework import status
 from rest_framework.test import APITestCase
 
 from core.models import Company, CopilotQueryLog, Permission, Role, RolePermission, UserRole
+from core.tests.helpers import create_permission
 from hr.models import AttendanceRecord, Department, Employee
 
 User = get_user_model()
@@ -29,7 +30,7 @@ class CopilotApiTests(APITestCase):
         )
 
         self.role, _ = Role.objects.get_or_create(company=self.company, name="HR")
-        self.permission = Permission.objects.create(
+        self.permission = create_permission(            
             code="copilot.attendance_report",
             name="Run copilot attendance report",
         )

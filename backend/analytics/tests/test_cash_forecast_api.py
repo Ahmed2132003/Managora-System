@@ -9,6 +9,7 @@ from rest_framework.test import APITestCase
 from accounting.models import Account, Customer, Expense, Invoice, Payment
 from analytics.models import CashForecastSnapshot
 from core.models import Company, Permission, Role, RolePermission, UserRole
+from core.tests.helpers import create_permission
 
 User = get_user_model()
 
@@ -22,7 +23,7 @@ class CashForecastAPITests(APITestCase):
             company=self.company,
         )
         role, _ = Role.objects.get_or_create(company=self.company, name="Finance")
-        permission = Permission.objects.create(
+        permission = create_permission(            
             code="analytics.view_finance", name="View Finance Analytics"
         )
         RolePermission.objects.get_or_create(role=role, permission=permission)        

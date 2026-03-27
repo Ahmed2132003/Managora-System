@@ -12,6 +12,7 @@ from accounting.models import Account, Expense
 from analytics.models import KPIDefinition, KPIFactDaily
 from analytics.tasks import build_analytics_range, build_kpis_daily
 from core.models import Company, Permission, Role, RolePermission, UserRole
+from core.tests.helpers import create_permission
 from hr.models import AttendanceRecord, Employee, Shift
 
 User = get_user_model()
@@ -192,7 +193,7 @@ class AnalyticsPermissionsTests(APITestCase):
         res = self.client.get(url)
         self.assertEqual(res.status_code, status.HTTP_403_FORBIDDEN)
 
-        permission = Permission.objects.create(
+        permission = create_permission(            
             code="analytics.view_hr", name="View HR Analytics"
         )
         RolePermission.objects.get_or_create(role=self.role, permission=permission)        

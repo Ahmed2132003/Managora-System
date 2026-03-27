@@ -4,6 +4,7 @@ from rest_framework import status
 from rest_framework.test import APITestCase
 
 from core.models import Company, Permission, Role, RolePermission, UserRole
+from core.tests.helpers import create_permission
 
 User = get_user_model()
 
@@ -23,7 +24,7 @@ class MeApiTests(APITestCase):
         self.assertEqual(res.status_code, status.HTTP_401_UNAUTHORIZED)
 
     def test_me_returns_user_company_roles_permissions(self):
-        permission = Permission.objects.create(
+        permission = create_permission(            
             code="users.view",
             name="View users",
         )
