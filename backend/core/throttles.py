@@ -16,7 +16,7 @@ class _DefaultRateMixin:
 
 class ThrottlingToggleMixin:
     def allow_request(self, request, view):
-        if getattr(settings, "DISABLE_THROTTLING", False):
+        if getattr(settings, "DISABLE_THROTTLING", False) and not getattr(settings, "TESTING", False):            
             return True
         return super().allow_request(request, view)
 
@@ -51,28 +51,16 @@ class ExportRateThrottle(ThrottlingToggleMixin, UserRateThrottle):
     scope = "export"
 
 
-class OtpVerifyRateThrottle(ThrottlingToggleMixin, _DefaultRateMixin, SimpleRateThrottle):    
+class OtpVerifyRateThrottle(ThrottlingToggleMixin, _DefaultRateMixin, UserRateThrottle):    
     scope = "otp_verify"
     default_rate = "5/min"
 
-    def get_cache_key(self, request, view):
-        ident = self.get_ident(request) or "anonymous"
-        return self.cache_format % {"scope": self.scope, "ident": ident}
 
-
-class AttendanceCheckinRateThrottle(ThrottlingToggleMixin, _DefaultRateMixin, SimpleRateThrottle):    
+class AttendanceCheckinRateThrottle(ThrottlingToggleMixin, _DefaultRateMixin, UserRateThrottle):    
     scope = "attendance_checkin"
     default_rate = "10/min"
 
-    def get_cache_key(self, request, view):
-        ident = self.get_ident(request) or "anonymous"
-        return self.cache_format % {"scope": self.scope, "ident": ident}
 
-
-class FileUploadRateThrottle(ThrottlingToggleMixin, _DefaultRateMixin, SimpleRateThrottle):    
+class FileUploadRateThrottle(ThrottlingToggleMixin, _DefaultRateMixin, UserRateThrottle):    
     scope = "file_upload"
     default_rate = "20/min"
-
-    def get_cache_key(self, request, view):
-        ident = self.get_ident(request) or "anonymous"
-        return self.cache_format % {"scope": self.scope, "ident": ident}

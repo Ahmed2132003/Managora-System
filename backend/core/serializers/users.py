@@ -92,14 +92,17 @@ class UserCreateSerializer(serializers.ModelSerializer):
                         {"detail": "You do not have permission to create users."}
                     )
 
-            # لازم role واحد (نوع حساب واحد)
-            if not role_ids:
+            # لازم role واحد (نوع حساب واحد) لغير السوبر يوزر.
+            # السوبر يوزر ممكن ينشئ المستخدم ثم يعيّن الدور لاحقاً.
+            if not role_ids and not creator.is_superuser:
                 raise serializers.ValidationError(
                     {"role_ids": "You must assign exactly one role when creating a user."}
                 )
+            if not role_ids and creator.is_superuser:
+                return attrs
             if len(role_ids) != 1:
                 raise serializers.ValidationError(
-                    {"role_ids": "Assign exactly one role (Manager, HR, Accountant, Employee)."}
+                    {"role_ids": "Assign exactly one role (Manager, HR, Accountant, Employee)."}                    
                 )
 
             requested_roles = Role.objects.filter(id__in=role_ids)

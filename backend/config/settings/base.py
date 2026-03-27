@@ -136,10 +136,16 @@ REST_FRAMEWORK = {
     "DEFAULT_PAGINATION_CLASS": "core.pagination.OptionalPagination",
     "PAGE_SIZE": 20,
     "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
+    "DEFAULT_THROTTLE_CLASSES": (
+        "rest_framework.throttling.UserRateThrottle",
+        "rest_framework.throttling.AnonRateThrottle",
+    ),
     "DEFAULT_THROTTLE_RATES": {
+        "user": "1000/min",
+        "anon": "200/min",
         "analytics": "120/min",
         "login": "5/min",
-        "otp_verify": "5/min",
+        "otp_verify": "5/min",        
         "attendance_checkin": "10/min",
         "file_upload": "20/min",
         "copilot": "30/min",
@@ -151,8 +157,10 @@ if TESTING:
     # Keep throttling code paths exercised in tests while preventing
     # unrelated tests from tripping strict production limits.
     REST_FRAMEWORK["DEFAULT_THROTTLE_RATES"] = {
+        "user": "10000/min",
+        "anon": "10000/min",
         "analytics": "10000/min",
-        "login": "10000/min",
+        "login": "10000/min",        
         "otp_verify": "10000/min",
         "attendance_checkin": "10000/min",
         "file_upload": "10000/min",

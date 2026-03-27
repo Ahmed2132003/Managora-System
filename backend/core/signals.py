@@ -96,7 +96,9 @@ def audit_post_save(sender, instance, created, **kwargs):
     if not _should_audit(sender):
         return
     audit_context = get_audit_context()
-    user = audit_context.user if audit_context else None
+    if audit_context is None:
+        return
+    user = audit_context.user if audit_context else None    
     actor = _resolve_actor(user)
     company = _resolve_company(instance, actor)
     if not company:
@@ -130,8 +132,10 @@ def audit_post_delete(sender, instance, **kwargs):
         return
     if sender is Company:
         return
-    audit_context = get_audit_context()    
-    user = audit_context.user if audit_context else None
+    audit_context = get_audit_context()
+    if audit_context is None:
+        return
+    user = audit_context.user if audit_context else None    
     actor = _resolve_actor(user)
     company = _resolve_company(instance, actor)
     if not company:
@@ -154,7 +158,9 @@ def audit_role_permissions_changed(sender, instance, action, reverse, model, pk_
         return
 
     audit_context = get_audit_context()
-    user = audit_context.user if audit_context else None
+    if audit_context is None:
+        return
+    user = audit_context.user if audit_context else None    
     actor = _resolve_actor(user)
     company = getattr(instance, "company", None) or _resolve_company(instance, actor)
     if not company:
