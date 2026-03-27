@@ -1,9 +1,17 @@
 from django.contrib.auth import get_user_model
+from django.conf import settings
 from rest_framework.settings import api_settings
 from rest_framework.throttling import SimpleRateThrottle, UserRateThrottle
 
 
-class LoginRateThrottle(SimpleRateThrottle):
+class ThrottlingToggleMixin:
+    def allow_request(self, request, view):
+        if getattr(settings, "DISABLE_THROTTLING", False):
+            return True
+        return super().allow_request(request, view)
+
+
+class LoginRateThrottle(ThrottlingToggleMixin, SimpleRateThrottle):    
     scope = "login"
 
     def get_rate(self):
@@ -25,15 +33,15 @@ class LoginRateThrottle(SimpleRateThrottle):
             return None
         return self.cache_format % {"scope": self.scope, "ident": ident}
             
-class CopilotRateThrottle(UserRateThrottle):
+class CopilotRateThrottle(ThrottlingToggleMixin, UserRateThrottle):    
     scope = "copilot"
 
 
-class ExportRateThrottle(UserRateThrottle):
+class ExportRateThrottle(ThrottlingToggleMixin, UserRateThrottle):    
     scope = "export"
 
 
-class OtpVerifyRateThrottle(SimpleRateThrottle):
+class OtpVerifyRateThrottle(ThrottlingToggleMixin, SimpleRateThrottle):    
     scope = "otp_verify"
 
     def get_cache_key(self, request, view):
@@ -41,7 +49,7 @@ class OtpVerifyRateThrottle(SimpleRateThrottle):
         return self.cache_format % {"scope": self.scope, "ident": ident}
 
 
-class AttendanceCheckinRateThrottle(SimpleRateThrottle):
+class AttendanceCheckinRateThrottle(ThrottlingToggleMixin, SimpleRateThrottle):    
     scope = "attendance_checkin"
 
     def get_cache_key(self, request, view):
@@ -49,7 +57,7 @@ class AttendanceCheckinRateThrottle(SimpleRateThrottle):
         return self.cache_format % {"scope": self.scope, "ident": ident}
 
 
-class FileUploadRateThrottle(SimpleRateThrottle):
+class FileUploadRateThrottle(ThrottlingToggleMixin, SimpleRateThrottle):    
     scope = "file_upload"
 
     def get_cache_key(self, request, view):

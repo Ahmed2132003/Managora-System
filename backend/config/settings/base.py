@@ -1,6 +1,7 @@
 from pathlib import Path
 import os
 import importlib.util
+import sys
 
 from datetime import timedelta
 
@@ -121,7 +122,10 @@ MEDIA_ROOT = os.getenv("MEDIA_ROOT", "/app/media")
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 # DRF
-REST_FRAMEWORK = {
+TESTING = "test" in sys.argv
+DISABLE_THROTTLING = os.getenv("DISABLE_THROTTLING", "").strip().lower() == "true"
+
+REST_FRAMEWORK = {    
     "DEFAULT_AUTHENTICATION_CLASSES": (
         "core.authentication.AuditJWTAuthentication",        
     ),
@@ -143,6 +147,19 @@ REST_FRAMEWORK = {
     },
 }
 
+if TESTING:
+    # Keep throttling code paths exercised in tests while preventing
+    # unrelated tests from tripping strict production limits.
+    REST_FRAMEWORK["DEFAULT_THROTTLE_RATES"] = {
+        "analytics": "10000/min",
+        "login": "10000/min",
+        "otp_verify": "10000/min",
+        "attendance_checkin": "10000/min",
+        "file_upload": "10000/min",
+        "copilot": "10000/min",
+        "export": "10000/min",
+    }
+    
 SIMPLE_JWT = {
     "ACCESS_TOKEN_LIFETIME": timedelta(minutes=15),
     "REFRESH_TOKEN_LIFETIME": timedelta(days=7),
