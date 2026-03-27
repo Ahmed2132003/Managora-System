@@ -28,11 +28,11 @@ class AuditLogSerializer(serializers.ModelSerializer):
         ]
 
     def _parts(self, obj: AuditLog) -> list[str]:
-        return (obj.action or "").split(".")
+        return [part for part in (obj.action or "").split(".") if part]    
 
     def get_action_type(self, obj: AuditLog) -> str:
         parts = self._parts(obj)
-        return parts[-1] if len(parts) >= 3 else ""
+        return parts[-1] if len(parts) >= 2 else ""    
 
     def get_app_label(self, obj: AuditLog) -> str:
         parts = self._parts(obj)

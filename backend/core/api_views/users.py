@@ -6,9 +6,10 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework import serializers as drf_serializers
 
+from django.db import transaction
 from django.db.models import Q
 
-from core.models import Role, User
+from core.models import AuditLog, Role, User
 from core.permissions import PermissionByActionMixin, is_admin_user
 from core.serializers.users import UserCreateSerializer, UserSerializer, UserUpdateSerializer
 
@@ -90,18 +91,19 @@ class UsersViewSet(PermissionByActionMixin, viewsets.ModelViewSet):
         return UserSerializer
 
     def perform_create(self, serializer):
-        """Create user.
-
-        IMPORTANT: Do not pass `company=` into serializer.save().
-
-        - UserCreateSerializer.validate() already resolves/forces company:
-          - non-superuser => request.user.company
-          - superuser => requires company in payload
-        - Passing kwargs can mask bugs and makes debugging harder.
-
-        Any create-time errors should return 400, not crash server.
-        """
-        serializer.save()
+        """Create user and persist a single business audit log entry."""
+        with transaction.atomic():
+            user = serializer.save()
+            AuditLog.objects.create(
+                company=user.company,
+                actor=self.request.user if self.request.user.is_authenticated else None,
+                action="users.create",
+                entity="user",
+                entity_id=str(user.id),
+                payload={"username": user.username},
+                before={},
+                after={"id": user.id, "username": user.username},
+            )
 
     def _allowed_role_names_for_actor(self, actor: User) -> set[str]:
         if actor.is_superuser:

@@ -6,12 +6,12 @@ from typing import Any
 
 from django.db import IntegrityError
 from django.db.models.fields.files import FieldFile
-from django.db.models.signals import post_delete, post_save, pre_save
+from django.db.models.signals import m2m_changed, post_delete, post_save, pre_save
 from django.dispatch import receiver
 from django.forms.models import model_to_dict
 
 from core.audit import get_audit_context
-from core.models import AuditLog, Company, User
+from core.models import AuditLog, Company, Role, User
 from core.services.setup_templates import apply_roles
 from hr.services.defaults import ensure_default_shifts
 
@@ -21,6 +21,8 @@ EXCLUDED_MODELS = {
     "exportlog",
     "copilotquerylog",
     "user",
+    "rolepermission",
+    "userrole",
 }
 
 
@@ -142,6 +144,31 @@ def audit_post_delete(sender, instance, **kwargs):
         entity_id=str(instance.pk),
         before=_serialize_instance(instance),
         after={},
+        ip_address=audit_context.ip_address if audit_context else None,
+        user_agent=audit_context.user_agent if audit_context else "",
+    )
+
+@receiver(m2m_changed, sender=Role.permissions.through)
+def audit_role_permissions_changed(sender, instance, action, reverse, model, pk_set, **kwargs):
+    if reverse or action not in {"post_add", "post_remove", "post_clear"}:
+        return
+
+    audit_context = get_audit_context()
+    user = audit_context.user if audit_context else None
+    actor = _resolve_actor(user)
+    company = getattr(instance, "company", None) or _resolve_company(instance, actor)
+    if not company:
+        return
+
+    current_codes = list(instance.permissions.order_by("id").values_list("code", flat=True))
+    _create_audit_log_safely(
+        company=company,
+        actor=actor,
+        action="core.role.update",
+        entity="role",
+        entity_id=str(instance.pk),
+        before={},
+        after={"permission_codes": current_codes},
         ip_address=audit_context.ip_address if audit_context else None,
         user_agent=audit_context.user_agent if audit_context else "",
     )

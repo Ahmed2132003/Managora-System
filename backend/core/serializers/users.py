@@ -1,3 +1,4 @@
+from django.db import transaction
 from rest_framework import serializers
 
 from core.models import Company, Role, User
@@ -66,9 +67,8 @@ class UserCreateSerializer(serializers.ModelSerializer):
             company = request.user.company
 
         if request and request.user.is_superuser and company is None:
-            raise serializers.ValidationError(
-                {"company": "Company is required when creating users as superuser."}
-            )
+            # Allow superusers to omit company when they are operating within their own tenant context.
+            company = getattr(request.user, "company", None)
 
         # Email uniqueness per company
         if attrs.get("email") and company:
@@ -111,7 +111,7 @@ class UserCreateSerializer(serializers.ModelSerializer):
             requested_role = requested_roles.first()
 
             # role لازم يكون من نفس الشركة اللي اليوزر هيتربط بيها
-            if requested_role.company_id != company.id:
+            if not company or requested_role.company_id != company.id:
                 raise serializers.ValidationError(
                     {"role_ids": "Role must belong to the same company as the user."}
                 )
@@ -163,14 +163,15 @@ class UserCreateSerializer(serializers.ModelSerializer):
         if not password:
             raise serializers.ValidationError({"password": "This field is required."})
 
-        user = User(**validated_data)
-        user.set_password(password)
-        user.save()
+        with transaction.atomic():
+            user = User(**validated_data)
+            user.set_password(password)
+            user.save()
 
-        # Assign exactly one role (already validated), if provided
-        if role_ids:
-            roles = Role.objects.filter(id__in=role_ids)
-            user.roles.set(roles)
+            # Assign exactly one role (already validated), if provided
+            if role_ids:
+                roles = Role.objects.filter(id__in=role_ids)
+                user.roles.set(roles)
 
         return user
     
@@ -187,8 +188,9 @@ class UserUpdateSerializer(serializers.ModelSerializer):
         if not value:
             return value
         request = self.context.get("request")
-        if request and User.objects.filter(
-            company=request.user.company, email__iexact=value
+        company = getattr(self.instance, "company", None)
+        if company and User.objects.filter(
+            company=company, email__iexact=value
         ).exclude(id=self.instance.id).exists():
             raise serializers.ValidationError(
                 "Email is already used by another user in this company."

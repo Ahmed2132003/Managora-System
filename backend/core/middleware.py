@@ -110,6 +110,7 @@ class GlobalExceptionMiddleware(MiddlewareMixin):
             return JsonResponse(
                 {
                     "detail": "حدث خطأ غير متوقع. حاول مرة أخرى بعد قليل.",
+                    "message": "حصل خطأ غير متوقع",
                     "request_id": request_id,
                 },
                 status=500,
