@@ -51,16 +51,22 @@ class ExportRateThrottle(ThrottlingToggleMixin, UserRateThrottle):
     scope = "export"
 
 
-class OtpVerifyRateThrottle(ThrottlingToggleMixin, _DefaultRateMixin, UserRateThrottle):    
-    scope = "otp_verify"
+class OTPThrottle(ThrottlingToggleMixin, _DefaultRateMixin, UserRateThrottle):
+    scope = "otp"    
     default_rate = "5/min"
 
 
-class AttendanceCheckinRateThrottle(ThrottlingToggleMixin, _DefaultRateMixin, UserRateThrottle):    
-    scope = "attendance_checkin"
+class AttendanceThrottle(ThrottlingToggleMixin, _DefaultRateMixin, UserRateThrottle):
+    scope = "attendance"    
     default_rate = "10/min"
 
 
-class FileUploadRateThrottle(ThrottlingToggleMixin, _DefaultRateMixin, UserRateThrottle):    
-    scope = "file_upload"
-    default_rate = "20/min"
+class UploadThrottle(ThrottlingToggleMixin, _DefaultRateMixin, UserRateThrottle):
+    scope = "upload"
+    default_rate = "3/min"
+
+
+# Backward-compatible aliases for legacy imports.
+OtpVerifyRateThrottle = OTPThrottle
+AttendanceCheckinRateThrottle = AttendanceThrottle
+FileUploadRateThrottle = UploadThrottle

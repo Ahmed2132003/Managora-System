@@ -9,10 +9,10 @@ from rest_framework.decorators import action
 from rest_framework.exceptions import ValidationError
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
-from rest_framework.throttling import ScopedRateThrottle
 
 from core.permissions import PermissionByActionMixin
 from core.tenancy import CompanyScopedViewSet
+from core.throttles import AttendanceThrottle
 from hr.models import AttendanceRecord
 from hr.attendance.serializers import (
     AttendanceActionSerializer,
@@ -58,6 +58,7 @@ def _parse_date_param(value, label):
 class AttendanceViewSet(PermissionByActionMixin, CompanyScopedViewSet):    
     serializer_class = AttendanceRecordSerializer
     permission_classes = [IsAuthenticated]
+    throttle_classes = [AttendanceThrottle]    
     permission_map = {
         "list": "attendance.*",
         "retrieve": "attendance.*",
@@ -70,14 +71,7 @@ class AttendanceViewSet(PermissionByActionMixin, CompanyScopedViewSet):
     http_method_names = ["get", "post", "patch", "delete", "head", "options"]
     queryset = AttendanceRecord.objects.all()
 
-    def get_throttles(self):
-        if self.action == "check_in":
-            self.throttle_classes = [ScopedRateThrottle]
-            self.throttle_scope = "attendance"
-            return super().get_throttles()
-        return []
-        
-    def get_queryset(self):
+    def get_queryset(self):        
         if self.action == "mine":
             date_from = _parse_date_param(self.request.query_params.get("date_from"), "date_from")
             date_to = _parse_date_param(self.request.query_params.get("date_to"), "date_to")
@@ -120,10 +114,9 @@ class AttendanceViewSet(PermissionByActionMixin, CompanyScopedViewSet):
     )
     @action(detail=False, methods=["post"], url_path="check-in")
     def check_in(self, request):
-        self.check_throttles(request)
         serializer = AttendanceActionSerializer(data=request.data, context={"request": request})
         serializer.is_valid(raise_exception=True)
-        attendance = perform_check_in(actor=request.user, payload=serializer.validated_data)        
+        attendance = perform_check_in(actor=request.user, payload=serializer.validated_data)                
         return Response(
             AttendanceRecordSerializer(attendance).data,
             status=status.HTTP_201_CREATED,

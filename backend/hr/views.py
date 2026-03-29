@@ -21,7 +21,6 @@ from rest_framework.generics import (
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.renderers import BaseRenderer
 from rest_framework.response import Response
-from rest_framework.throttling import ScopedRateThrottle
 from rest_framework.views import APIView
 
 from core.models import User
@@ -30,7 +29,7 @@ from core.permissions import (
     PermissionByActionMixin,
     user_has_permission,
 )
-from core.tenancy import CompanyScopedViewSet
+from core.throttles import UploadThrottle
 from hr.models import (
     AttendanceRecord,
     Department,
@@ -453,11 +452,11 @@ class EmployeeDefaultsView(APIView):
     tags=["Employee Documents"],
     summary="List or create employee documents",
 )
+
 class EmployeeDocumentListCreateView(ListCreateAPIView):
     permission_classes = [IsAuthenticated]
-    throttle_classes = [ScopedRateThrottle]
-    throttle_scope = "upload"
-        
+    throttle_classes = [UploadThrottle]      
+      
     def get_employee(self):
         employee = get_object_or_404(Employee.all_objects, pk=self.kwargs["employee_id"])
         if employee.company_id != self.request.user.company_id:
@@ -504,9 +503,8 @@ class EmployeeDocumentListCreateView(ListCreateAPIView):
         return context
 
     def create(self, request, *args, **kwargs):
-        self.check_throttles(request)
+        
         return super().create(request, *args, **kwargs)
-
 
 @extend_schema(
     tags=["Employee Documents"],
@@ -514,9 +512,8 @@ class EmployeeDocumentListCreateView(ListCreateAPIView):
 )
 class MyEmployeeDocumentListCreateView(ListCreateAPIView):
     permission_classes = [IsAuthenticated]
-    throttle_classes = [ScopedRateThrottle]
-    throttle_scope = "upload"
-        
+    throttle_classes = [UploadThrottle]
+            
     def get_employee(self):
         employee = getattr(self.request.user, "employee_profile", None)
         if not employee or employee.company_id != self.request.user.company_id:
@@ -553,7 +550,7 @@ class MyEmployeeDocumentListCreateView(ListCreateAPIView):
         return context
 
     def create(self, request, *args, **kwargs):
-        self.check_throttles(request)
+        
         return super().create(request, *args, **kwargs)
 
 
