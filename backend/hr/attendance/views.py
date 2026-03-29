@@ -10,6 +10,7 @@ from rest_framework.exceptions import ValidationError
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
+from core.api_views.base import ThrottledInitialMixin
 from core.permissions import PermissionByActionMixin
 from core.tenancy import CompanyScopedViewSet
 from core.throttles import AttendanceThrottle
@@ -55,7 +56,7 @@ def _parse_date_param(value, label):
     partial_update=extend_schema(tags=["Attendance"], summary="Partially update attendance record"),
     destroy=extend_schema(tags=["Attendance"], summary="Delete attendance record"),
 )
-class AttendanceViewSet(PermissionByActionMixin, CompanyScopedViewSet):    
+class AttendanceViewSet(ThrottledInitialMixin, PermissionByActionMixin, CompanyScopedViewSet):        
     serializer_class = AttendanceRecordSerializer
     permission_classes = [IsAuthenticated]
     throttle_classes = [AttendanceThrottle]    

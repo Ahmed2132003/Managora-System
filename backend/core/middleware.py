@@ -6,12 +6,58 @@ from django.conf import settings
 from django.http import JsonResponse
 from django.shortcuts import render
 from django.utils.deprecation import MiddlewareMixin
-
+from rest_framework.throttling import BaseThrottle
 from core.audit import clear_audit_context, get_client_ip, set_audit_context
 from core.models import Company
 
 logger = logging.getLogger("managora.request")
 
+
+class GlobalRateLimitMiddleware:
+    """Run DRF throttle classes as early as possible in Django middleware."""
+
+    def __init__(self, get_response):
+        self.get_response = get_response
+
+    def __call__(self, request):
+        if getattr(settings, "DISABLE_THROTTLING", False) and not getattr(settings, "TESTING", False):
+            return self.get_response(request)
+
+        throttle_instances = self._build_throttles(request)
+        if throttle_instances:
+            waits = []
+            for throttle in throttle_instances:
+                if not throttle.allow_request(request, None):
+                    print("THROTTLE HIT")
+                    waits.append(throttle.wait())
+
+            if waits:
+                payload = {"detail": "Request was throttled."}
+                wait = max([wait for wait in waits if wait is not None], default=None)
+                if wait is not None:
+                    payload["wait"] = wait
+                return JsonResponse(payload, status=429)
+
+        return self.get_response(request)
+
+    def _build_throttles(self, request):
+        match = getattr(request, "resolver_match", None)
+        if match is None:
+            return []
+
+        throttle_classes = []
+        view_cls = getattr(getattr(match, "func", None), "cls", None)
+        if view_cls is not None:
+            throttle_classes.extend(getattr(view_cls, "throttle_classes", []) or [])
+
+        if not throttle_classes:
+            return []
+
+        instances = []
+        for throttle_class in throttle_classes:
+            if isinstance(throttle_class, type) and issubclass(throttle_class, BaseThrottle):
+                instances.append(throttle_class())
+        return instances
 class AuditContextMiddleware(MiddlewareMixin):
     """Attach request-scoped audit context attributes.
 
