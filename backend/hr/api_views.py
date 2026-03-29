@@ -23,13 +23,14 @@ from rest_framework.renderers import BaseRenderer
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from core.api_views.base import ThrottledAPIView, ThrottledListCreateAPIView
 from core.models import User
 from core.permissions import (
     HasAnyPermission,
     PermissionByActionMixin,
     user_has_permission,
 )
-from core.throttles import UploadThrottle
+from core.throttles import AttendanceThrottle, UploadThrottle
 from core.viewsets import CompanyScopedViewSet
 from hr.models import (
     AttendanceRecord,
@@ -454,7 +455,7 @@ class EmployeeDefaultsView(APIView):
     summary="List or create employee documents",
 )
 
-class EmployeeDocumentListCreateView(ListCreateAPIView):
+class EmployeeDocumentListCreateView(ThrottledListCreateAPIView):    
     permission_classes = [IsAuthenticated]
     throttle_classes = [UploadThrottle]      
       
@@ -511,7 +512,7 @@ class EmployeeDocumentListCreateView(ListCreateAPIView):
     tags=["Employee Documents"],
     summary="List or create my employee documents",
 )
-class MyEmployeeDocumentListCreateView(ListCreateAPIView):
+class MyEmployeeDocumentListCreateView(ThrottledListCreateAPIView):    
     permission_classes = [IsAuthenticated]
     throttle_classes = [UploadThrottle]
             
@@ -813,9 +814,10 @@ def _user_has_payroll_permission(user, codes):
     return any(user_has_permission(user, code) for code in codes)
 
 
-class AttendanceCheckInView(APIView):
+class AttendanceCheckInView(ThrottledAPIView):
     permission_classes = [IsAuthenticated]
-
+    throttle_classes = [AttendanceThrottle]
+    
     @extend_schema(
         tags=["Attendance"],
         summary="Employee check-in",

@@ -4,6 +4,7 @@ from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from core.api_views.base import ThrottledAPIView
 from core.serializers.auth import TwoFALoginVerifySerializer
 from core.throttles import OTPThrottle
 from core.serializers.two_factor import (
@@ -13,7 +14,7 @@ from core.serializers.two_factor import (
     TwoFAVerifyActivationSerializer,
 )
 @extend_schema(tags=["Auth"], summary="Verify login 2FA challenge")
-class TwoFALoginVerifyView(APIView):
+class TwoFALoginVerifyView(ThrottledAPIView):    
     permission_classes = [AllowAny]
     throttle_classes = [OTPThrottle]
 
@@ -35,7 +36,7 @@ class TwoFASetupView(APIView):
 
 
 @extend_schema(tags=["Auth"], summary="Verify and activate 2FA")
-class TwoFAVerifyView(APIView):
+class TwoFAVerifyView(ThrottledAPIView):    
     permission_classes = [IsAuthenticated]
     throttle_classes = [OTPThrottle]
 
