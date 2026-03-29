@@ -36,7 +36,7 @@ from hr.attendance.services import (
     reject_attendance,
     request_self_attendance_otp,
 )
-from hr.views import ShiftViewSet, WorkSiteViewSet
+from hr.api_views import ShiftViewSet, WorkSiteViewSet
 
 
 
@@ -114,7 +114,7 @@ class AttendanceViewSet(PermissionByActionMixin, CompanyScopedViewSet):
     )
     @action(detail=False, methods=["post"], url_path="check-in")
     def check_in(self, request):
-        serializer = AttendanceActionSerializer(data=request.data, context={"request": request})
+        serializer = AttendanceActionSerializer(data=request.data, context={"request": request})        
         serializer.is_valid(raise_exception=True)
         attendance = perform_check_in(actor=request.user, payload=serializer.validated_data)                
         return Response(

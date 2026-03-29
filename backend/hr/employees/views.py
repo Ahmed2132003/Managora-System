@@ -2,7 +2,7 @@
 Employee and organization views.
 Re-exports from hr.views for domain URL config; view logic can be moved here incrementally.
 """
-from hr.views import (
+from hr.api_views import (    
     DepartmentViewSet,
     EmployeeDefaultsView,
     EmployeeDocumentDeleteView,

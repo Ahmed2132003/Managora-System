@@ -1,7 +1,7 @@
 """
 Payroll and commission views. Re-exports from hr.views for domain URL config.
 """
-from hr.views import (
+from hr.api_views import (    
     CommissionApprovalsInboxView,
     CommissionApproveView,
     CommissionRejectView,
