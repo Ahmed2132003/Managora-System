@@ -52,18 +52,42 @@ class ExportRateThrottle(ThrottlingToggleMixin, UserRateThrottle):
 
 
 class OTPThrottle(ThrottlingToggleMixin, _DefaultRateMixin, UserRateThrottle):
-    scope = "otp"    
+    scope = "otp"
     default_rate = "5/min"
 
+    def get_cache_key(self, request, view):
+        # 🔥 مهم: لأن user ممكن يكون anonymous
+        ident = request.data.get("email") or request.data.get("username")
+
+        if not ident:
+            ident = self.get_ident(request)  # fallback للـ IP
+
+        return f"throttle_{self.scope}_{ident}"
 
 class AttendanceThrottle(ThrottlingToggleMixin, _DefaultRateMixin, UserRateThrottle):
-    scope = "attendance"    
+    scope = "attendance"
     default_rate = "10/min"
+
+    def get_cache_key(self, request, view):
+        if request.user and request.user.is_authenticated:
+            ident = request.user.pk
+        else:
+            ident = self.get_ident(request)
+
+        return f"throttle_{self.scope}_{ident}"
 
 
 class UploadThrottle(ThrottlingToggleMixin, _DefaultRateMixin, UserRateThrottle):
     scope = "upload"
     default_rate = "3/min"
+
+    def get_cache_key(self, request, view):
+        if request.user and request.user.is_authenticated:
+            ident = request.user.pk
+        else:
+            ident = self.get_ident(request)
+
+        return f"throttle_{self.scope}_{ident}"
 
 
 # Backward-compatible aliases for legacy imports.

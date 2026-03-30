@@ -60,7 +60,6 @@ MIDDLEWARE = [
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
-    "core.middleware.GlobalRateLimitMiddleware",
     "core.middleware.AuditContextMiddleware",
     "core.middleware.RequestLoggingMiddleware",
     "core.middleware.GlobalExceptionMiddleware",    

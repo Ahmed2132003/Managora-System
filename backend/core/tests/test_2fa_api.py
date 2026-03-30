@@ -18,6 +18,11 @@ User = get_user_model()
         ),
         "DEFAULT_PERMISSION_CLASSES": ("rest_framework.permissions.IsAuthenticated",),
         "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
+
+        "DEFAULT_THROTTLE_CLASSES": (
+            "rest_framework.throttling.UserRateThrottle",
+        ),
+
         "DEFAULT_THROTTLE_RATES": {
             "analytics": "120/min",
             "login": "5/min",
@@ -30,6 +35,7 @@ User = get_user_model()
         },        
     }
 )
+
 class TwoFactorApiTests(APITestCase):
     def setUp(self):
         cache.clear()
