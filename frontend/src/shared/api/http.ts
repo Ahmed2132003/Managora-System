@@ -133,9 +133,20 @@ async function doRefresh(refreshToken: string): Promise<string | null> {
 // Attach token
 http.interceptors.request.use((config) => {
   const accessToken = getAccessToken();
+  const requestUrl = `${config.baseURL ?? ""}${config.url ?? ""}`;
+  console.debug("[auth][request]", {
+    url: requestUrl,
+    method: config.method,
+    hasAccessToken: Boolean(accessToken),
+  });
   if (accessToken) {
     config.headers = config.headers ?? {};
     config.headers.Authorization = `Bearer ${accessToken}`;
+    console.debug("[auth][request-headers]", {
+      url: requestUrl,
+      authorization: "Bearer <redacted>",
+      headerKeys: Object.keys(config.headers),
+    });
   }
   return config;
 });
@@ -150,6 +161,14 @@ http.interceptors.response.use(
     const originalRequest = (error.config ?? {}) as RetriableConfig;
     const status = (error as AxiosError).response?.status;
     const refreshToken = getRefreshToken();
+    const requestUrl = `${originalRequest.baseURL ?? ""}${originalRequest.url ?? ""}`;
+
+    console.warn("[auth][response-error]", {
+      url: requestUrl,
+      status,
+      hasAccessToken: Boolean(getAccessToken()),
+      hasRefreshToken: Boolean(refreshToken),
+    });
 
     // Network error (no response)
     if (!error.response && !originalRequest._networkNotified) {
@@ -162,19 +181,20 @@ http.interceptors.response.use(
       return Promise.reject(error);
     }
 
-    const requestUrl = String(originalRequest.url ?? "");
+    const requestPath = String(originalRequest.url ?? "");
 
     // Don’t try to refresh if this request IS the refresh call itself
     const isRefreshCall =
-      requestUrl.includes(String(endpoints?.auth?.refresh ?? "")) ||
-      requestUrl.includes("/api/auth/refresh") ||
-      requestUrl.includes("/api/auth/token/refresh") ||
-      requestUrl.includes("/api/v1/auth/refresh") ||
-      requestUrl.includes("/api/v1/auth/token/refresh");
+      requestPath.includes(String(endpoints?.auth?.refresh ?? "")) ||
+      requestPath.includes("/api/auth/refresh") ||
+      requestPath.includes("/api/auth/token/refresh") ||
+      requestPath.includes("/api/v1/auth/refresh") ||
+      requestPath.includes("/api/v1/auth/token/refresh");
 
     // ✅ Handle 401 with refresh + QUEUE
     if (status === 401 && refreshToken && !originalRequest._retry && !isRefreshCall) {
       originalRequest._retry = true;
+      console.warn("[auth][401] attempting refresh", { url: requestUrl });
 
       // If refresh is already happening, queue this request and wait
       if (isRefreshing) {
@@ -201,9 +221,10 @@ http.interceptors.response.use(
         const newAccess = await refreshPromise;
 
         if (!newAccess) {
+          console.error("[auth][refresh] refresh succeeded but no access token returned");
           processQueue(new Error("Refresh returned no access token"), null);
           clearTokens();
-          redirectToLogin();
+          redirectToLogin();          
           return Promise.reject(error);
         }
 
@@ -216,9 +237,10 @@ http.interceptors.response.use(
 
         return http(originalRequest);
       } catch (refreshError: unknown) {
+        console.error("[auth][refresh] failed, redirecting to login", refreshError);
         processQueue(refreshError, null);
         clearTokens();
-        redirectToLogin();
+        redirectToLogin();        
         return Promise.reject(refreshError);
       } finally {
         isRefreshing = false;
@@ -227,10 +249,13 @@ http.interceptors.response.use(
 
     // If still 401 (no refresh token / refresh expired / refresh call itself failed)
     if (status === 401) {
+      console.error("[auth][401] no valid refresh path, clearing tokens and redirecting", {
+        url: requestUrl,
+      });
       clearTokens();
       redirectToLogin();
     }
-
+    
     return Promise.reject(error);
   }
 );

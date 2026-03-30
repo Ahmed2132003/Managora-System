@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { notifications } from "@mantine/notifications";
 import { useQueryClient } from "@tanstack/react-query";
+import axios from "axios";
 import {
   useCreateLeaveRequestMutation,
   useLeaveTypesQuery,
@@ -342,8 +343,11 @@ export function LeaveRequestPage() {
     if (!leaveTypesQuery.isError) {
       return null;
     }
+    if (axios.isAxiosError(leaveTypesQuery.error) && leaveTypesQuery.error.response?.status === 401) {
+      return "Session expired, please login again";
+    }
     return content.messages.leaveTypesError;
-  }, [content.messages.leaveTypesError, leaveTypesQuery.isError]);
+  }, [content.messages.leaveTypesError, leaveTypesQuery.error, leaveTypesQuery.isError]);  
   const leaveTypesEmpty =
     !leaveTypesQuery.isLoading && !leaveTypesQuery.isError && leaveTypeOptions.length === 0;
   const leaveTypeNotice =

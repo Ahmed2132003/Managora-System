@@ -1,6 +1,8 @@
 import { useQuery } from "@tanstack/react-query";
+import axios from "axios";
 import { endpoints } from "../api/endpoints";
 import { http } from "../api/http";
+import { getAccessToken } from "./tokens";
 
 export type MeResponse = {
   user: {
@@ -32,8 +34,31 @@ export function useMe() {
   return useQuery({
     queryKey: ["me"],
     queryFn: async () => {
-      const response = await http.get<MeResponse>(endpoints.me);
-      return response.data;
+      const endpoint = endpoints.me;
+      console.info("[auth][me] fetch:start", {
+        endpoint,
+        hasAccessToken: Boolean(getAccessToken()),
+      });
+      try {
+        const response = await http.get<MeResponse>(endpoint);
+        console.info("[auth][me] fetch:success", {
+          endpoint,
+          userId: response.data.user?.id,
+          companyId: response.data.company?.id,
+        });
+        return response.data;
+      } catch (error) {
+        if (axios.isAxiosError(error)) {
+          console.error("[auth][me] fetch:error", {
+            endpoint,
+            status: error.response?.status,
+            headers: error.config?.headers,
+          });
+        } else {
+          console.error("[auth][me] fetch:error", error);
+        }
+        throw error;
+      }
     },
   });
 }

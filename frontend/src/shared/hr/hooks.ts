@@ -1,6 +1,8 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
+import axios from "axios";
 import { endpoints } from "../api/endpoints";
 import { http } from "../api/http";
+import { getAccessToken } from "../auth/tokens";
 
 export type AttendanceEmployee = {
   id: number;
@@ -1076,16 +1078,40 @@ export function useLeaveTypesQuery() {
   return useQuery({
     queryKey: ["leaves", "types"],
     queryFn: async () => {
-      const response = await http.get<LeaveType[] | { results: LeaveType[] }>(
-        endpoints.hr.leaveTypes
-      );
-      if (Array.isArray(response.data)) {
-        return response.data;
+      const endpoint = endpoints.hr.leaveTypes;
+      console.info("[leaves][types] fetch:start", {
+        endpoint,
+        hasAccessToken: Boolean(getAccessToken()),
+      });
+      try {
+        const response = await http.get<LeaveType[] | { results: LeaveType[] }>(endpoint);
+        if (Array.isArray(response.data)) {
+          console.info("[leaves][types] fetch:success", {
+            endpoint,
+            count: response.data.length,
+          });
+          return response.data;
+        }
+        if ("results" in response.data && Array.isArray(response.data.results)) {
+          console.info("[leaves][types] fetch:success", {
+            endpoint,
+            count: response.data.results.length,
+          });
+          return response.data.results;
+        }
+        throw new Error("Unexpected leave types response shape.");
+      } catch (error) {
+        if (axios.isAxiosError(error)) {
+          console.error("[leaves][types] fetch:error", {
+            endpoint,
+            status: error.response?.status,
+            headers: error.config?.headers,
+          });
+        } else {
+          console.error("[leaves][types] fetch:error", error);
+        }
+        throw error;
       }
-      if ("results" in response.data && Array.isArray(response.data.results)) {
-        return response.data.results;
-      }
-      return [];
     },
   });
 }
