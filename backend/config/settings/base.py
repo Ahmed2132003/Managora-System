@@ -138,13 +138,15 @@ REST_FRAMEWORK = {
     "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
     "EXCEPTION_HANDLER": "core.exceptions.custom_exception_handler",
     "DEFAULT_THROTTLE_CLASSES": (
-        "rest_framework.throttling.UserRateThrottle",
+        "core.throttles.ReadWriteUserRateThrottle",
     ),    
     "DEFAULT_THROTTLE_RATES": {
-        "user": "5/min",
+        "user": "120/min",
+        "user_read": "300/min",
+        "user_write": "90/min",
         "analytics": "120/min",
         "login": "5/min",
-        "otp": "5/min",
+        "otp": "5/min",        
         "attendance": "10/min",
         "upload": "3/min",        
         "copilot": "30/min",
@@ -157,8 +159,10 @@ if TESTING:
     # unrelated tests from tripping strict production limits.
     REST_FRAMEWORK["DEFAULT_THROTTLE_RATES"] = {
         "user": "10000/min",
+        "user_read": "10000/min",
+        "user_write": "10000/min",
         "analytics": "10000/min",
-        "login": "10000/min",        
+        "login": "10000/min",                    
         "otp": "10000/min",
         "attendance": "10000/min",
         "upload": "10000/min",

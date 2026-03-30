@@ -16,12 +16,42 @@ class _DefaultRateMixin:
 
 class ThrottlingToggleMixin:
     def allow_request(self, request, view):
+        if getattr(request, "method", "").upper() == "OPTIONS":
+            return True
         if getattr(settings, "DISABLE_THROTTLING", False) and not getattr(settings, "TESTING", False):            
             return True
         return super().allow_request(request, view)
 
 
-class LoginRateThrottle(ThrottlingToggleMixin, SimpleRateThrottle):    
+class ReadWriteUserRateThrottle(ThrottlingToggleMixin, UserRateThrottle):
+    """
+    Use relaxed limits for read traffic and stricter limits for write traffic.
+    """
+
+    scope = "user"
+    read_scope = "user_read"
+    write_scope = "user_write"
+
+    def _resolve_rate(self, request):
+        rates = api_settings.DEFAULT_THROTTLE_RATES
+        if not isinstance(rates, dict):
+            return None
+
+        method = getattr(request, "method", "").upper()
+        if method in ("GET", "HEAD"):
+            return rates.get(self.read_scope) or rates.get(self.scope)
+        return rates.get(self.write_scope) or rates.get(self.scope)
+
+    def allow_request(self, request, view):
+        self.rate = self._resolve_rate(request)
+        if not self.rate:
+            return True
+
+        self.num_requests, self.duration = self.parse_rate(self.rate)
+        return super().allow_request(request, view)
+
+
+class LoginRateThrottle(ThrottlingToggleMixin, SimpleRateThrottle):        
     scope = "login"
 
     def get_rate(self):
