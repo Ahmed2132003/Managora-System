@@ -8,8 +8,10 @@ export function PayrollPage() {
   const periodsQuery = usePayrollPeriods();
   const employeesQuery = usePayrollEmployees();
   const salaryStructuresQuery = useSalaryStructures();
+  console.log("DATA TABLE INPUT:", periodsQuery.data);
+  console.log("DATA TABLE INPUT:", employeesQuery.data);
 
-  return (
+  return (    
     <DashboardShell
       copy={{
         en: { title: "Payroll", subtitle: "Payroll periods and salary structures" },

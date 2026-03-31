@@ -12,18 +12,23 @@ BASE_DIR = Path(__file__).resolve().parent.parent.parent  # backend/
 SECRET_KEY = os.getenv("SECRET_KEY", "dev-secret-key-change-me")
 # Optional: urlsafe_b64 Fernet key (32 bytes) for encrypting company email app passwords
 ATTENDANCE_EMAIL_ENCRYPTION_KEY = os.getenv("ATTENDANCE_EMAIL_ENCRYPTION_KEY", "") or None
-ATTENDANCE_OTP_MODE = (os.getenv("ATTENDANCE_OTP_MODE", "console") or "console").strip().lower()
-if ATTENDANCE_OTP_MODE not in {"console", "email"}:
-    ATTENDANCE_OTP_MODE = "console"
-ATTENDANCE_OTP_SENDER_EMAIL = os.getenv("ATTENDANCE_OTP_SENDER_EMAIL", "") or None
-ATTENDANCE_OTP_APP_PASSWORD = os.getenv("ATTENDANCE_OTP_APP_PASSWORD", "") or None
-ATTENDANCE_OTP_SMTP_HOST = os.getenv("ATTENDANCE_OTP_SMTP_HOST", "smtp.gmail.com")
-ATTENDANCE_OTP_SMTP_PORT = int(os.getenv("ATTENDANCE_OTP_SMTP_PORT", "587"))
+ATTENDANCE_OTP_MODE = "email"
+EMAIL_BACKEND = os.getenv("EMAIL_BACKEND", "django.core.mail.backends.smtp.EmailBackend")
+EMAIL_HOST = os.getenv("EMAIL_HOST", "smtp.gmail.com")
+EMAIL_PORT = int(os.getenv("EMAIL_PORT", "587"))
+EMAIL_USE_TLS = (os.getenv("EMAIL_USE_TLS", "1") == "1")
+EMAIL_HOST_USER = os.getenv("EMAIL_HOST_USER", "")
+EMAIL_HOST_PASSWORD = os.getenv("EMAIL_HOST_PASSWORD", "")
+ATTENDANCE_OTP_SENDER_EMAIL = os.getenv("ATTENDANCE_OTP_SENDER_EMAIL", EMAIL_HOST_USER) or None
+ATTENDANCE_OTP_APP_PASSWORD = os.getenv("ATTENDANCE_OTP_APP_PASSWORD", EMAIL_HOST_PASSWORD) or None
+ATTENDANCE_OTP_SMTP_HOST = os.getenv("ATTENDANCE_OTP_SMTP_HOST", EMAIL_HOST)
+ATTENDANCE_OTP_SMTP_PORT = int(os.getenv("ATTENDANCE_OTP_SMTP_PORT", str(EMAIL_PORT)))
 TWO_FA_ENCRYPTION_KEY = os.getenv("TWO_FA_ENCRYPTION_KEY", "") or None
 TWO_FA_ISSUER_NAME = os.getenv("TWO_FA_ISSUER_NAME", "Managora")
 NOTIFICATIONS_EMAIL_ENABLED = os.getenv("NOTIFICATIONS_EMAIL_ENABLED", "1") == "1"
 NOTIFICATIONS_EMAIL_ENABLED = os.getenv("NOTIFICATIONS_EMAIL_ENABLED", "1") == "1"
-DEFAULT_FROM_EMAIL = os.getenv("DEFAULT_FROM_EMAIL", "no-reply@managora.local")
+DEFAULT_FROM_EMAIL = os.getenv("DEFAULT_FROM_EMAIL", EMAIL_HOST_USER or "no-reply@managora.local")
+DEBUG = os.getenv("DEBUG", "1") == "1"
 DEBUG = os.getenv("DEBUG", "1") == "1"
 
 ALLOWED_HOSTS = [h.strip() for h in os.getenv("ALLOWED_HOSTS", "localhost,127.0.0.1").split(",") if h.strip()]

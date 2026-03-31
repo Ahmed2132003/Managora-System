@@ -14,9 +14,11 @@ export function AttendancePage() {
   const attendanceQuery = useAttendance(filters);
   const pendingQuery = useAttendancePendingApprovals();
   const approveMutation = useApproveAttendance();
+  console.log("DATA TABLE INPUT:", attendanceQuery.data);
+  console.log("DATA TABLE INPUT:", pendingQuery.data);
 
   const records = filterAttendance(attendanceQuery.data ?? [], filters.search);
-
+  
   return (
     <DashboardShell
       copy={{

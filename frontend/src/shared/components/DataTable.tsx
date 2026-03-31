@@ -1,13 +1,15 @@
 import { Table } from "@mantine/core";
 import type { ReactNode } from "react";
 
-type DataTableProps<T> = {
-  columns: Array<{ key: string; title: string; render: (row: T) => ReactNode }>;
-  rows: T[];
-  rowKey: (row: T) => string | number;
+type DataTableProps = {
+  columns: Array<{ key: string; title: string; render: (row: any) => ReactNode }>;
+  rows: any[];
+  rowKey: (row: any) => string | number;
 };
 
-export function DataTable<T>({ columns, rows, rowKey }: DataTableProps<T>) {
+export function DataTable({ columns, rows, rowKey }: DataTableProps) {
+  const safeRows = Array.isArray(rows) ? rows : [];
+
   return (
     <Table striped highlightOnHover withTableBorder>
       <Table.Thead>
@@ -18,7 +20,7 @@ export function DataTable<T>({ columns, rows, rowKey }: DataTableProps<T>) {
         </Table.Tr>
       </Table.Thead>
       <Table.Tbody>
-        {rows.map((row) => (
+        {rows.map((row) => (          
           <Table.Tr key={rowKey(row)}>
             {columns.map((column) => (
               <Table.Td key={column.key}>{column.render(row)}</Table.Td>

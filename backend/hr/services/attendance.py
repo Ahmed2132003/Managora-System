@@ -392,7 +392,7 @@ def check_out(
 import secrets
 import hashlib
 from django.conf import settings
-from django.core.mail import EmailMessage, get_connection
+from django.core.mail import send_mail
 from hr.models import AttendanceOtpRequest
 
 OTP_VALID_SECONDS = 60
@@ -423,7 +423,7 @@ def _get_otp_mode() -> str:
     return mode
 
 
-def _send_otp_email(*, to_email: str, code: str, purpose: str) -> None:
+def _send_otp_email(*, to_email: str, code: str, purpose: str) -> None:    
     sender_email = getattr(settings, 'ATTENDANCE_OTP_SENDER_EMAIL', None)
     app_password = getattr(settings, 'ATTENDANCE_OTP_APP_PASSWORD', None)
 
@@ -433,24 +433,13 @@ def _send_otp_email(*, to_email: str, code: str, purpose: str) -> None:
                            'Set ATTENDANCE_OTP_SENDER_EMAIL and ATTENDANCE_OTP_APP_PASSWORD.'
         })
         
-    subject = 'Managora Attendance Verification Code'
-    body = (
-        f'Your verification code for {purpose} is: {code}\n'
-        f'This code expires in {OTP_VALID_SECONDS} seconds.\n\n'
-        '— Managora'
-    )
-    connection = get_connection(
-        backend='django.core.mail.backends.smtp.EmailBackend',
-        host=getattr(settings, 'ATTENDANCE_OTP_SMTP_HOST', 'smtp.gmail.com'),
-        port=getattr(settings, 'ATTENDANCE_OTP_SMTP_PORT', 587),
-        username=sender_email,
-        password=app_password,
-        use_tls=True,
+    send_mail(
+        subject="Your Attendance OTP Code",
+        message=f"Your OTP code is: {code}",
+        from_email=getattr(settings, "DEFAULT_FROM_EMAIL", sender_email),
+        recipient_list=[to_email],
         fail_silently=False,
     )
-    msg = EmailMessage(subject=subject, body=body, from_email=sender_email, to=[to_email], connection=connection)
-    msg.send(fail_silently=False)
-
 
 def _dispatch_attendance_otp(*, user, code: str, purpose: str) -> str:
     mode = _get_otp_mode()
@@ -464,9 +453,13 @@ def _dispatch_attendance_otp(*, user, code: str, purpose: str) -> str:
                 user.company_id,
             )
             raise
+        except Exception as exc:
+            logger.error("OTP EMAIL FAILED: %s", str(exc))
+            raise serializers.ValidationError({"email": "Failed to send OTP email. Please try again."}) from exc
+        logger.info("OTP EMAIL SENT to %s", user.email)
         logger.info(
             "ATTENDANCE_OTP_SEND_SUCCESS mode=email user_id=%s company_id=%s purpose=%s",
-            user.id,
+            user.id,            
             user.company_id,
             purpose,
         )

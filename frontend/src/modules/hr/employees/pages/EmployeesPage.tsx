@@ -8,8 +8,9 @@ import { useEmployees } from "../hooks/useEmployees";
 export function EmployeesPage() {
   const { filters, setSearch, setStatus, clear } = useEmployeeFilters();
   const employeesQuery = useEmployees(filters);
+  console.log("DATA TABLE INPUT:", employeesQuery.data);
 
-  return (
+  return (    
     <DashboardShell
       copy={{
         en: { title: "Employees", subtitle: "Modular employee management" },
