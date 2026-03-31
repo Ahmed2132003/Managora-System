@@ -1,4 +1,5 @@
 from datetime import timedelta
+import logging
 from io import BytesIO
 
 from django.db.models import Q
@@ -105,6 +106,9 @@ from hr.leaves.services import approve_leave, reject_leave, request_leave, cance
 from hr.services.lock import lock_period
 from hr.services.payslip import render_payslip_pdf
 import re
+
+logger = logging.getLogger(__name__)
+
 
 
 @extend_schema_view(
@@ -721,10 +725,8 @@ def _build_pending_attendance_items(record: AttendanceRecord) -> list[dict]:
             }
         )
     return items
-import logging
-logger = logging.getLogger(__name__)
 
-def _user_can_approve(user, leave_request):
+def _user_can_approve(user, leave_request):    
     # Permissions
     has_leaves = user_has_permission(user, "leaves.*")
     has_approvals = user_has_permission(user, "approvals.*")
@@ -1370,18 +1372,40 @@ class LeaveRequestCreateView(CreateAPIView):
 
     def create(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        leave_request = request_leave(
-            employee=serializer.validated_data["employee"],
-            leave_type=serializer.validated_data["leave_type"],
-            start_date=serializer.validated_data["start_date"],
-            end_date=serializer.validated_data["end_date"],
-            reason=serializer.validated_data.get("reason"),
-        )        
+        if not serializer.is_valid():
+            logger.warning(
+                "Leave request validation failed before service call",
+                extra={
+                    "user_id": request.user.id,
+                    "company_id": request.user.company_id,
+                    "payload": dict(request.data),
+                    "errors": serializer.errors,
+                },
+            )
+            raise ValidationError(serializer.errors)
+        try:
+            leave_request = request_leave(
+                employee=serializer.validated_data["employee"],
+                leave_type=serializer.validated_data["leave_type"],
+                start_date=serializer.validated_data["start_date"],
+                end_date=serializer.validated_data["end_date"],
+                reason=serializer.validated_data.get("reason"),
+            )
+        except ValidationError as exc:
+            logger.warning(
+                "Leave request service validation failed",
+                extra={
+                    "user_id": request.user.id,
+                    "company_id": request.user.company_id,
+                    "payload": dict(request.data),
+                    "detail": exc.detail,
+                },
+            )
+            raise
         return Response(
             LeaveRequestSerializer(leave_request).data, status=status.HTTP_201_CREATED
         )
-
+        
 
 @extend_schema(
     tags=["Leaves"],

@@ -280,7 +280,48 @@ const contentMap: Record<Language, Content> = {
   },
 };
 
+function normalizeDateForApi(rawDate: string) {
+  if (!rawDate) {
+    return "";
+  }
+  if (/^\d{4}-\d{2}-\d{2}$/.test(rawDate)) {
+    return rawDate;
+  }
+  const parsed = new Date(rawDate);
+  if (Number.isNaN(parsed.getTime())) {
+    return rawDate;
+  }
+  return parsed.toISOString().split("T")[0];
+}
+
+function flattenValidationErrors(value: unknown): string[] {
+  if (Array.isArray(value)) {
+    return value.flatMap((item) => flattenValidationErrors(item));
+  }
+  if (value && typeof value === "object") {
+    return Object.entries(value as Record<string, unknown>).flatMap(([field, fieldValue]) => {
+      const fieldMessages = flattenValidationErrors(fieldValue);
+      return fieldMessages.map((message) => `${field}: ${message}`);
+    });
+  }
+  if (value == null) {
+    return [];
+  }
+  return [String(value)];
+}
+
 function formatApiError(error: unknown) {
+  if (axios.isAxiosError(error)) {
+    const backendData = error.response?.data;
+    const messages = flattenValidationErrors(backendData);
+    if (messages.length > 0) {
+      return messages.join("\n");
+    }
+    if (backendData && typeof backendData === "object") {
+      return JSON.stringify(backendData);
+    }
+    return error.message;
+  }
   if (error instanceof Error) {
     return error.message;
   }
@@ -374,16 +415,20 @@ export function LeaveRequestPage() {
       return;
     }
 
-    try {
-      await createMutation.mutateAsync({
+    const payload = {
         leave_type_id: Number(leaveTypeId),
-        start_date: startDate,
-        end_date: endDate,
+        start_date: normalizeDateForApi(startDate),
+        end_date: normalizeDateForApi(endDate),
         reason: reason.trim() || undefined,
-      });
+      };
+
+    console.info("[leaves][request] submit:payload", payload);
+
+    try {
+      await createMutation.mutateAsync(payload);
       notifications.show({
         title: content.notifications.successTitle,
-        message: content.notifications.successMessage,        
+        message: content.notifications.successMessage,                      
         color: "green",
       });
       setLeaveTypeId(null);
@@ -393,9 +438,18 @@ export function LeaveRequestPage() {
       await queryClient.invalidateQueries({ queryKey: ["leaves", "requests", "my"] });
       await queryClient.invalidateQueries({ queryKey: ["leaves", "balances", "my"] });
     } catch (error) {
+      if (axios.isAxiosError(error)) {
+        console.error("[leaves][request] submit:error", {
+          status: error.response?.status,
+          payload,
+          response: error.response?.data,
+        });
+      } else {
+        console.error("[leaves][request] submit:error", { payload, error });
+      }
       notifications.show({
         title: content.notifications.failedTitle,
-        message: formatApiError(error),
+        message: formatApiError(error),        
         color: "red",
       });
     }
