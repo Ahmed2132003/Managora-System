@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from datetime import date, datetime, time, timedelta
 from math import atan2, cos, radians, sin, sqrt
 from typing import Any, Optional
+import logging
 
 from django.core import signing
 from django.utils import timezone
@@ -395,6 +396,10 @@ from django.core.mail import EmailMessage, get_connection
 from hr.models import AttendanceOtpRequest
 
 OTP_VALID_SECONDS = 60
+OTP_MODE_CONSOLE = "console"
+OTP_MODE_EMAIL = "email"
+
+logger = logging.getLogger(__name__)
 
 
 def _hash_otp(code: str, salt: str) -> str:
@@ -411,6 +416,13 @@ def _get_attendance_worksite(company) -> WorkSite:
     return ws
 
 
+def _get_otp_mode() -> str:
+    mode = (getattr(settings, "ATTENDANCE_OTP_MODE", OTP_MODE_CONSOLE) or OTP_MODE_CONSOLE).strip().lower()
+    if mode not in {OTP_MODE_CONSOLE, OTP_MODE_EMAIL}:
+        return OTP_MODE_CONSOLE
+    return mode
+
+
 def _send_otp_email(*, to_email: str, code: str, purpose: str) -> None:
     sender_email = getattr(settings, 'ATTENDANCE_OTP_SENDER_EMAIL', None)
     app_password = getattr(settings, 'ATTENDANCE_OTP_APP_PASSWORD', None)
@@ -420,7 +432,7 @@ def _send_otp_email(*, to_email: str, code: str, purpose: str) -> None:
             'email_config': 'OTP email sender is not configured. '
                            'Set ATTENDANCE_OTP_SENDER_EMAIL and ATTENDANCE_OTP_APP_PASSWORD.'
         })
-
+        
     subject = 'Managora Attendance Verification Code'
     body = (
         f'Your verification code for {purpose} is: {code}\n'
@@ -440,7 +452,43 @@ def _send_otp_email(*, to_email: str, code: str, purpose: str) -> None:
     msg.send(fail_silently=False)
 
 
-def request_self_attendance_otp(user, purpose: str) -> dict[str, Any]:
+def _dispatch_attendance_otp(*, user, code: str, purpose: str) -> str:
+    mode = _get_otp_mode()
+    if mode == OTP_MODE_EMAIL:
+        try:
+            _send_otp_email(to_email=user.email, code=code, purpose=purpose)
+        except serializers.ValidationError:
+            logger.warning(
+                "ATTENDANCE_OTP_SEND_FAILED mode=email user_id=%s company_id=%s reason=email_config_missing",
+                user.id,
+                user.company_id,
+            )
+            raise
+        logger.info(
+            "ATTENDANCE_OTP_SEND_SUCCESS mode=email user_id=%s company_id=%s purpose=%s",
+            user.id,
+            user.company_id,
+            purpose,
+        )
+        return OTP_MODE_EMAIL
+
+    logger.info(
+        "ATTENDANCE_OTP_CONSOLE mode=console user_id=%s company_id=%s purpose=%s",
+        user.id,
+        user.company_id,
+        purpose,
+    )
+    if settings.DEBUG:
+        logger.info(
+            "ATTENDANCE_OTP_DEBUG_CODE mode=console user_id=%s company_id=%s otp=%s",
+            user.id,
+            user.company_id,
+            code,
+        )
+    return OTP_MODE_CONSOLE
+
+
+def request_self_attendance_otp(user, purpose: str) -> dict[str, Any]:    
     employee = getattr(user, "employee_profile", None)
     if not employee:
         raise serializers.ValidationError({"employee": "This user is not linked to an employee profile."})
@@ -458,8 +506,8 @@ def request_self_attendance_otp(user, purpose: str) -> dict[str, Any]:
         expires_at=timezone.now() + timedelta(seconds=OTP_VALID_SECONDS),
     )
 
-    _send_otp_email(to_email=user.email, code=code, purpose=purpose)
-    return {"request_id": otp.id, "expires_in": OTP_VALID_SECONDS}
+    mode_used = _dispatch_attendance_otp(user=user, code=code, purpose=purpose)
+    return {"request_id": otp.id, "expires_in": OTP_VALID_SECONDS, "mode": mode_used}
 
 
 def verify_self_attendance_otp(user, *, request_id: int, code: str, lat: float, lng: float) -> AttendanceRecord:

@@ -12,7 +12,11 @@ BASE_DIR = Path(__file__).resolve().parent.parent.parent  # backend/
 SECRET_KEY = os.getenv("SECRET_KEY", "dev-secret-key-change-me")
 # Optional: urlsafe_b64 Fernet key (32 bytes) for encrypting company email app passwords
 ATTENDANCE_EMAIL_ENCRYPTION_KEY = os.getenv("ATTENDANCE_EMAIL_ENCRYPTION_KEY", "") or None
+ATTENDANCE_OTP_MODE = (os.getenv("ATTENDANCE_OTP_MODE", "console") or "console").strip().lower()
+if ATTENDANCE_OTP_MODE not in {"console", "email"}:
+    ATTENDANCE_OTP_MODE = "console"
 ATTENDANCE_OTP_SENDER_EMAIL = os.getenv("ATTENDANCE_OTP_SENDER_EMAIL", "") or None
+ATTENDANCE_OTP_APP_PASSWORD = os.getenv("ATTENDANCE_OTP_APP_PASSWORD", "") or None
 ATTENDANCE_OTP_SMTP_HOST = os.getenv("ATTENDANCE_OTP_SMTP_HOST", "smtp.gmail.com")
 ATTENDANCE_OTP_SMTP_PORT = int(os.getenv("ATTENDANCE_OTP_SMTP_PORT", "587"))
 TWO_FA_ENCRYPTION_KEY = os.getenv("TWO_FA_ENCRYPTION_KEY", "") or None

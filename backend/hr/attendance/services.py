@@ -269,16 +269,16 @@ def build_pending_attendance_items(record: AttendanceRecord) -> list[dict]:
 
 
 def get_email_config_payload() -> dict:
+    mode = (getattr(settings, "ATTENDANCE_OTP_MODE", "console") or "console").strip().lower()
     sender_email = getattr(settings, "ATTENDANCE_OTP_SENDER_EMAIL", "") or ""
-    configured = bool(
-        sender_email and getattr(settings, "ATTENDANCE_OTP_APP_PASSWORD", "")
-    )
+    configured = bool(sender_email and getattr(settings, "ATTENDANCE_OTP_APP_PASSWORD", ""))
     return {
+        "mode": mode,
         "configured": configured,
         "sender_email": sender_email,
         "is_active": True,
     }
-
+    
 
 check_in = attendance_check_in
 check_out = attendance_check_out

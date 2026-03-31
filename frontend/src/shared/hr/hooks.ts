@@ -44,6 +44,7 @@ export type AttendanceOtpPurpose = "checkin" | "checkout";
 export type AttendanceSelfRequestOtpResponse = {
   request_id: number;
   expires_in: number;
+  mode?: "console" | "email";
 };
 
 export type AttendancePendingItem = {
@@ -93,10 +94,11 @@ export function useAttendanceEmailConfigQuery() {
     queryKey: ["attendance", "email-config"],
     queryFn: async () => {
       const response = await http.get<{
+        mode?: "console" | "email";
         configured: boolean;
         sender_email?: string;
         is_active?: boolean;
-      }>(endpoints.hr.attendanceEmailConfig);
+      }>(endpoints.hr.attendanceEmailConfig);      
       return response.data;
     },
   });

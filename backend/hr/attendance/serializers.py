@@ -142,10 +142,11 @@ class AttendancePendingItemSerializer(serializers.Serializer):
 
 
 class AttendanceEmailConfigSerializer(serializers.Serializer):
+    mode = serializers.ChoiceField(choices=["console", "email"], required=False)
     configured = serializers.BooleanField()
     sender_email = serializers.EmailField(allow_blank=True)
     is_active = serializers.BooleanField()
-
+    
 
 __all__ = [
     "AttendanceActionSerializer",

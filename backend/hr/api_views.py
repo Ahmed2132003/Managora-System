@@ -1017,15 +1017,17 @@ class AttendanceEmailConfigView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
+        mode = (getattr(settings, "ATTENDANCE_OTP_MODE", "console") or "console").strip().lower()
         sender_email = getattr(settings, "ATTENDANCE_OTP_SENDER_EMAIL", "") or ""
         configured = bool(sender_email and getattr(settings, "ATTENDANCE_OTP_APP_PASSWORD", ""))
-        return Response({"configured": configured, "sender_email": sender_email, "is_active": True})
+        return Response({"mode": mode, "configured": configured, "sender_email": sender_email, "is_active": True})
 
     def post(self, request):
         # Ignore body; configuration comes from settings.
+        mode = (getattr(settings, "ATTENDANCE_OTP_MODE", "console") or "console").strip().lower()
         sender_email = getattr(settings, "ATTENDANCE_OTP_SENDER_EMAIL", "") or ""
         configured = bool(sender_email and getattr(settings, "ATTENDANCE_OTP_APP_PASSWORD", ""))
-        return Response({"configured": configured, "sender_email": sender_email, "is_active": True})
+        return Response({"mode": mode, "configured": configured, "sender_email": sender_email, "is_active": True})    
 @extend_schema(
     tags=["Attendance"],
     summary="List pending attendance items that require approval",

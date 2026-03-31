@@ -340,12 +340,19 @@ function getErrorDetail(error: unknown): string {
     const data = error.response?.data;
     if (data && typeof data === "object") {
       const obj = data as Record<string, unknown>;
+      const emailConfig = obj.email_config;
+      if (Array.isArray(emailConfig) && emailConfig.length > 0) {
+        return String(emailConfig[0]);
+      }
+      if (typeof emailConfig === "string") {
+        return emailConfig;
+      }
       const detail = obj.detail ?? obj.otp ?? obj.code;
       if (typeof detail === "string" || typeof detail === "number") {
         return String(detail);
       }
     }
-  }
+  }  
   return formatApiError(error);
 }
 
@@ -451,11 +458,15 @@ export function SelfAttendancePage() {
           message: content.otpSentMessage,
         });
       } catch (e: unknown) {
+        console.error("attendance.requestOtp.failed", {
+          error: e,
+          response: axios.isAxiosError(e) ? e.response?.data : null,
+        });
         notifications.show({
           title: content.otpSendFailedTitle,
           message: getErrorDetail(e),
           color: "red",
-        });
+        });        
       }
     },
     [content.otpSentTitle, content.otpSentMessage, content.otpSendFailedTitle, requestOtp]
