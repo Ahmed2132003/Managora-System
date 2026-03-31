@@ -1,7 +1,7 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
 import axios from "axios";
 import { endpoints } from "../api/endpoints";
-import { http } from "../api/http";
+import { getAuthDebugState, http } from "../api/http";
 import { getAccessToken } from "../auth/tokens";
 
 export type AttendanceEmployee = {
@@ -1074,31 +1074,82 @@ export type HRActionUpdatePayload = Partial<{
   period_end: string | null;
 }>;
 
-export function useLeaveTypesQuery() {
+type LeaveTypesQueryOptions = {
+  enabled?: boolean;
+  authUser?: { id?: number } | null;
+  authCompany?: { id?: number } | null;
+  authIsReady?: boolean;
+};
+
+export function useLeaveTypesQuery(options?: LeaveTypesQueryOptions) {
   return useQuery({
     queryKey: ["leaves", "types"],
+    enabled: options?.enabled ?? true,
     queryFn: async () => {
       const endpoint = endpoints.hr.leaveTypes;
+      const accessToken = getAccessToken();
+      const authState = getAuthDebugState();
+      const timestamp = new Date().toISOString();
+      const tokenPhase = authState.isRefreshing
+        ? "pre-refresh"
+        : authState.lastRefreshAt
+          ? "post-refresh"
+          : "pre-refresh";
       console.info("[leaves][types] fetch:start", {
+        timestamp,
         endpoint,
-        hasAccessToken: Boolean(getAccessToken()),
+        hasAccessToken: Boolean(accessToken),
+        tokenPrefix: accessToken?.slice(0, 10) ?? null,
+        tokenPhase,
+        authState,
+        authReady: options?.authIsReady ?? null,
+        user: options?.authUser ?? null,
+        company: options?.authCompany ?? null,
       });
       try {
         const response = await http.get<LeaveType[] | { results: LeaveType[] }>(endpoint);
         if (Array.isArray(response.data)) {
-          console.info("[leaves][types] fetch:success", {
+          console.info("[leaves][types][debug]", {
+            timestamp,
             endpoint,
-            count: response.data.length,
+            tokenPrefix: accessToken?.slice(0, 10) ?? null,
+            tokenPhase,
+            user: options?.authUser ?? null,
+            company: options?.authCompany ?? null,
+            response: response.data,
           });
+          if (response.data.length === 0) {
+            console.error("EMPTY LEAVE TYPES - THIS IS A BUG", {
+              endpoint,
+              tokenPhase,
+              user: options?.authUser ?? null,
+              company: options?.authCompany ?? null,
+              response: response.data,
+            });
+          }
           return response.data;
         }
         if ("results" in response.data && Array.isArray(response.data.results)) {
-          console.info("[leaves][types] fetch:success", {
+          console.info("[leaves][types][debug]", {
+            timestamp,
             endpoint,
-            count: response.data.results.length,
+            tokenPrefix: accessToken?.slice(0, 10) ?? null,
+            tokenPhase,
+            user: options?.authUser ?? null,
+            company: options?.authCompany ?? null,
+            response: response.data,
           });
+          if (response.data.results.length === 0) {
+            console.error("EMPTY LEAVE TYPES - THIS IS A BUG", {
+              endpoint,
+              tokenPhase,
+              user: options?.authUser ?? null,
+              company: options?.authCompany ?? null,
+              response: response.data,
+            });
+          }
           return response.data.results;
-        }
+        }        
         throw new Error("Unexpected leave types response shape.");
       } catch (error) {
         if (axios.isAxiosError(error)) {

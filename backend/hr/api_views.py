@@ -1247,7 +1247,8 @@ class HRActionViewSet(
 class LeaveTypeViewSet(CompanyScopedViewSet):    
     serializer_class = LeaveTypeSerializer
     permission_classes = [IsAuthenticated]
-
+    queryset = LeaveType.objects.all()
+    
     def get_permissions(self):
         permissions = [permission() for permission in self.permission_classes]
         if self.action in {"create", "partial_update", "destroy"}:
@@ -1256,11 +1257,28 @@ class LeaveTypeViewSet(CompanyScopedViewSet):
 
     def get_queryset(self):
         queryset = super().get_queryset()
-                
+        company_id = getattr(self.request.user, "company_id", None)
+        if company_id is None:
+            logger.error(
+                "LEAVE_TYPES_DEBUG missing_company user_id=%s is_auth=%s",
+                getattr(self.request.user, "id", None),
+                getattr(self.request.user, "is_authenticated", False),
+            )
+            raise ValidationError({"detail": "Authenticated user must belong to a company."})
+
         if not user_has_permission(self.request.user, "leaves.*"):
             queryset = queryset.filter(is_active=True)
-    queryset = LeaveType.objects.all()
-    
+        logger.warning(
+            "LEAVE_TYPES_DEBUG %s",
+            {
+                "user_id": getattr(self.request.user, "id", None),
+                "is_auth": bool(getattr(self.request.user, "is_authenticated", False)),
+                "company_id": company_id,
+                "count": queryset.count(),
+            },
+        )
+        return queryset    
+
 
 @extend_schema_view(
     list=extend_schema(tags=["Leaves"], summary="List leave balances"),

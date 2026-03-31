@@ -75,6 +75,7 @@ type QueueItem = {
 let refreshPromise: Promise<string | null> | null = null;
 let isRefreshing = false;
 const requestQueue: QueueItem[] = [];
+let lastRefreshAt: string | null = null;
 
 function processQueue(error: unknown, newAccess: string | null) {
   while (requestQueue.length) {
@@ -131,11 +132,31 @@ async function doRefresh(refreshToken: string): Promise<string | null> {
 }
 
 // Attach token
-http.interceptors.request.use((config) => {
+export function getAuthDebugState() {
+  return {
+    isRefreshing,
+    hasRefreshPromise: Boolean(refreshPromise),
+    lastRefreshAt,
+  };
+}
+
+http.interceptors.request.use(async (config) => {
+  if (isRefreshing && refreshPromise) {
+    try {
+      const refreshedAccessToken = await refreshPromise;
+      if (refreshedAccessToken) {
+        config.headers = config.headers ?? {};
+        config.headers.Authorization = `Bearer ${refreshedAccessToken}`;
+      }
+    } catch {
+      // noop: the response interceptor handles global refresh failures.
+    }
+  }
+
   const accessToken = getAccessToken();
   const requestUrl = `${config.baseURL ?? ""}${config.url ?? ""}`;
   console.debug("[auth][request]", {
-    url: requestUrl,
+    url: requestUrl,    
     method: config.method,
     hasAccessToken: Boolean(accessToken),
   });
@@ -231,7 +252,8 @@ http.interceptors.response.use(
         // Apply token and retry original
         originalRequest.headers = originalRequest.headers ?? {};
         originalRequest.headers.Authorization = `Bearer ${newAccess}`;
-
+        lastRefreshAt = new Date().toISOString();
+        
         // Resolve queued requests too
         processQueue(null, newAccess);
 
@@ -255,7 +277,7 @@ http.interceptors.response.use(
       clearTokens();
       redirectToLogin();
     }
-    
+
     return Promise.reject(error);
   }
 );

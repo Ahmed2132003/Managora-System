@@ -292,7 +292,15 @@ export function LeaveRequestPage() {
   const location = useLocation();
   const queryClient = useQueryClient();
   const meQuery = useMe();
-  const leaveTypesQuery = useLeaveTypesQuery();
+  const authIsReady = !meQuery.isLoading && !meQuery.isFetching;
+  const authUser = meQuery.data?.user ?? null;
+  const authCompany = meQuery.data?.company ?? null;
+  const leaveTypesQuery = useLeaveTypesQuery({
+    enabled: authIsReady && Boolean(authUser),
+    authIsReady,
+    authUser,
+    authCompany,
+  });  
   const createMutation = useCreateLeaveRequestMutation();
 
   const [searchTerm, setSearchTerm] = useState("");
