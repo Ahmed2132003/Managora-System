@@ -17,15 +17,14 @@ export function AttendanceTable({ records, isLoading, isError }: AttendanceTable
   return (
     <Card withBorder>
       <Text fw={600} mb="sm">Attendance Records</Text>
-      <DataTable
-        rows={records}
-        rowKey={(row) => row.id}
+      <DataTable<AttendanceRecord>
+        data={records}
         columns={[
-          { key: "employee", title: "Employee", render: (row) => row.employee.full_name },
-          { key: "date", title: "Date", render: (row) => row.date },
-          { key: "in", title: "Check in", render: (row) => row.check_in_time ?? "-" },
-          { key: "out", title: "Check out", render: (row) => row.check_out_time ?? "-" },
-          { key: "status", title: "Status", render: (row) => row.status },
+          { key: "employee", label: "Employee", render: (row) => row.employee.full_name },
+          { key: "date", label: "Date" },
+          { key: "check_in_time", label: "Check in", render: (row) => row.check_in_time ?? "-" },
+          { key: "check_out_time", label: "Check out", render: (row) => row.check_out_time ?? "-" },
+          { key: "status", label: "Status" },
         ]}
       />
     </Card>

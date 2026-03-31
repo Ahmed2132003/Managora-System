@@ -17,14 +17,13 @@ export function PayrollPeriodsTable({ periods, isLoading, isError }: PayrollPeri
   return (
     <Card withBorder>
       <Text fw={600} mb="sm">Payroll periods</Text>
-      <DataTable
-        rows={periods}
-        rowKey={(row) => row.id}
+      <DataTable<PayrollPeriod>
+        data={periods}
         columns={[
-          { key: "period", title: "Period", render: (row) => `${row.year}-${String(row.month).padStart(2, "0")}` },
-          { key: "type", title: "Type", render: (row) => row.period_type },
-          { key: "range", title: "Range", render: (row) => `${row.start_date} → ${row.end_date}` },
-          { key: "status", title: "Status", render: (row) => row.status },
+          { key: "id", label: "Period", render: (row) => `${row.year}-${String(row.month).padStart(2, "0")}` },
+          { key: "period_type", label: "Type" },
+          { key: "start_date", label: "Range", render: (row) => `${row.start_date} → ${row.end_date}` },
+          { key: "status", label: "Status" },
         ]}
       />
     </Card>

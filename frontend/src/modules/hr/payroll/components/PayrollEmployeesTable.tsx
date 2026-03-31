@@ -18,15 +18,14 @@ export function PayrollEmployeesTable({ employees, salaryStructures, isLoading, 
   return (
     <Card withBorder>
       <Text fw={600} mb="sm">Employee salaries</Text>
-      <DataTable
-        rows={employees}
-        rowKey={(row) => row.id}
+      <DataTable<PayrollEmployee>
+        data={employees}
         columns={[
-          { key: "code", title: "Code", render: (row) => row.employee_code },
-          { key: "name", title: "Employee", render: (row) => row.full_name },
+          { key: "employee_code", label: "Code" },
+          { key: "full_name", label: "Employee" },
           {
-            key: "salaryType",
-            title: "Salary type",
+            key: "id",
+            label: "Salary type",
             render: (row) => salaryStructures.find((structure) => structure.employee === row.id)?.salary_type ?? "-",
           },
         ]}

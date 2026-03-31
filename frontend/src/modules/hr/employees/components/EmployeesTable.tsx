@@ -17,15 +17,14 @@ export function EmployeesTable({ data, isLoading, isError }: EmployeesTableProps
   return (
     <Card withBorder>
       <Text fw={600} mb="sm">Employee Directory</Text>
-      <DataTable
-        rows={data}
-        rowKey={(row) => row.id}
+      <DataTable<Employee>
+        data={data}
         columns={[
-          { key: "code", title: "Code", render: (row) => row.employee_code },
-          { key: "name", title: "Name", render: (row) => row.full_name },
-          { key: "department", title: "Department", render: (row) => row.department?.name ?? "-" },
-          { key: "title", title: "Job title", render: (row) => row.job_title?.name ?? "-" },
-          { key: "status", title: "Status", render: (row) => row.status },
+          { key: "employee_code", label: "Code" },
+          { key: "full_name", label: "Name" },
+          { key: "department", label: "Department", render: (row) => row.department?.name ?? "-" },
+          { key: "job_title", label: "Job title", render: (row) => row.job_title?.name ?? "-" },
+          { key: "status", label: "Status" },
         ]}
       />
     </Card>
