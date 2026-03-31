@@ -1,9 +1,14 @@
 import { Center, Loader } from "@mantine/core";
+import type { MantineSize } from "@mantine/core";
 
-export function LoadingSpinner() {
+type LoadingSpinnerProps = {
+  size?: MantineSize;
+};
+
+export default function LoadingSpinner({ size = "md" }: LoadingSpinnerProps) {
   return (
     <Center py="xl">
-      <Loader />
+      <Loader size={size} />
     </Center>
   );
 }

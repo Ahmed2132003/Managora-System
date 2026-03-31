@@ -1,7 +1,5 @@
 import { Button, Card, Group, Text } from "@mantine/core";
-import { EmptyState } from "../../../../shared/components/EmptyState";
-import { ErrorState } from "../../../../shared/components/ErrorState";
-import { LoadingSpinner } from "../../../../shared/components/LoadingSpinner";
+import { EmptyState, ErrorState, LoadingSpinner } from "@/shared/components";
 import type { AttendancePendingItem } from "../types/attendance.types";
 
 type PendingApprovalsPanelProps = {
@@ -15,7 +13,7 @@ type PendingApprovalsPanelProps = {
 export function PendingApprovalsPanel({ items, isLoading, isError, onApprove, isApproving }: PendingApprovalsPanelProps) {
   if (isLoading) return <LoadingSpinner />;
   if (isError) return <ErrorState message="Failed to load pending approvals." />;
-  if (items.length === 0) return <EmptyState message="No pending approvals." />;
+  if (items.length === 0) return <EmptyState title="No pending approvals" description="There are no attendance approvals waiting for review." />;
 
   return (
     <Card withBorder>

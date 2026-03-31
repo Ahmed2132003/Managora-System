@@ -1,8 +1,6 @@
 import { Card, Text } from "@mantine/core";
 import { DataTable } from "../../../../shared/components/DataTable";
-import { EmptyState } from "../../../../shared/components/EmptyState";
-import { ErrorState } from "../../../../shared/components/ErrorState";
-import { LoadingSpinner } from "../../../../shared/components/LoadingSpinner";
+import { EmptyState, ErrorState, LoadingSpinner } from "@/shared/components";
 import type { PayrollEmployee, SalaryStructure } from "../types/payroll.types";
 
 type PayrollEmployeesTableProps = {
@@ -15,7 +13,7 @@ type PayrollEmployeesTableProps = {
 export function PayrollEmployeesTable({ employees, salaryStructures, isLoading, isError }: PayrollEmployeesTableProps) {
   if (isLoading) return <LoadingSpinner />;
   if (isError) return <ErrorState message="Failed to load employee payroll data." />;
-  if (!employees.length) return <EmptyState message="No employees found." />;
+  if (!employees.length) return <EmptyState title="No employees" description="No employee records match your current filters." />;
 
   return (
     <Card withBorder>

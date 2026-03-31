@@ -1,8 +1,6 @@
 import { Card, Text } from "@mantine/core";
 import { DataTable } from "../../../../shared/components/DataTable";
-import { EmptyState } from "../../../../shared/components/EmptyState";
-import { ErrorState } from "../../../../shared/components/ErrorState";
-import { LoadingSpinner } from "../../../../shared/components/LoadingSpinner";
+import { EmptyState, ErrorState, LoadingSpinner } from "@/shared/components";
 import type { PayrollPeriod } from "../types/payroll.types";
 
 type PayrollPeriodsTableProps = {
@@ -14,7 +12,7 @@ type PayrollPeriodsTableProps = {
 export function PayrollPeriodsTable({ periods, isLoading, isError }: PayrollPeriodsTableProps) {
   if (isLoading) return <LoadingSpinner />;
   if (isError) return <ErrorState message="Failed to load payroll periods." />;
-  if (!periods.length) return <EmptyState message="No payroll periods found." />;
+  if (!periods.length) return <EmptyState title="No payroll periods" description="Create a payroll period to start processing payroll." />;
 
   return (
     <Card withBorder>

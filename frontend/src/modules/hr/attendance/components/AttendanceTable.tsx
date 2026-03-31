@@ -1,8 +1,6 @@
 import { Card, Text } from "@mantine/core";
 import { DataTable } from "../../../../shared/components/DataTable";
-import { EmptyState } from "../../../../shared/components/EmptyState";
-import { ErrorState } from "../../../../shared/components/ErrorState";
-import { LoadingSpinner } from "../../../../shared/components/LoadingSpinner";
+import { EmptyState, ErrorState, LoadingSpinner } from "@/shared/components";
 import type { AttendanceRecord } from "../types/attendance.types";
 
 type AttendanceTableProps = {
@@ -14,7 +12,7 @@ type AttendanceTableProps = {
 export function AttendanceTable({ records, isLoading, isError }: AttendanceTableProps) {
   if (isLoading) return <LoadingSpinner />;
   if (isError) return <ErrorState message="Failed to load attendance records." />;
-  if (records.length === 0) return <EmptyState message="No attendance data available." />;
+  if (records.length === 0) return <EmptyState title="No attendance records" description="No attendance data is available for the selected filters." />;
 
   return (
     <Card withBorder>
