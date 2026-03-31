@@ -423,24 +423,26 @@ def _get_otp_mode() -> str:
     return mode
 
 
-def _send_otp_email(*, to_email: str, code: str, purpose: str) -> None:    
-    sender_email = getattr(settings, 'ATTENDANCE_OTP_SENDER_EMAIL', None)
-    app_password = getattr(settings, 'ATTENDANCE_OTP_APP_PASSWORD', None)
-
+def _send_otp_email(*, to_email: str, code: str, purpose: str) -> None:
+    sender_email = getattr(settings, "EMAIL_HOST_USER", None)
+    app_password = getattr(settings, "EMAIL_HOST_PASSWORD", None)
+    
     if not sender_email or not app_password:
-        raise serializers.ValidationError({
-            'email_config': 'OTP email sender is not configured. '
-                           'Set ATTENDANCE_OTP_SENDER_EMAIL and ATTENDANCE_OTP_APP_PASSWORD.'
-        })
-        
+        raise serializers.ValidationError(
+            {
+                "email_config": "OTP email sender is not configured. "
+                "Set EMAIL_HOST_USER and EMAIL_HOST_PASSWORD (Gmail app password)."
+            }
+        )
+
     send_mail(
         subject="Your Attendance OTP Code",
         message=f"Your OTP code is: {code}",
-        from_email=getattr(settings, "DEFAULT_FROM_EMAIL", sender_email),
+        from_email=settings.DEFAULT_FROM_EMAIL,
         recipient_list=[to_email],
         fail_silently=False,
     )
-
+    
 def _dispatch_attendance_otp(*, user, code: str, purpose: str) -> str:
     mode = _get_otp_mode()
     if mode == OTP_MODE_EMAIL:

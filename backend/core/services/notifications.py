@@ -26,7 +26,7 @@ def send_email_notification(*, to_email: str, subject: str, body: str) -> bool:
     if not to_email or not _is_enabled("NOTIFICATIONS_EMAIL_ENABLED", True):
         return False
 
-    from_email = getattr(settings, "DEFAULT_FROM_EMAIL", "no-reply@managora.local")
+    from_email = getattr(settings, "DEFAULT_FROM_EMAIL", "")    
     try:
         sent = send_mail(
             subject=subject,
