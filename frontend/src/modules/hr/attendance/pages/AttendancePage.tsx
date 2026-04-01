@@ -7,6 +7,14 @@ import {
   useDepartments,
   useEmployees,
   useCreateLeaveTypeMutation,
+  useShifts,
+  useCreateShift,
+  useUpdateShift,
+  useDeleteShift,
+  useWorksites,
+  useCreateWorksite,
+  useUpdateWorksite,
+  useDeleteWorksite,
 } from "../../../../shared/hr/hooks";
 import { useMe } from "../../../../shared/auth/useMe";
 import { clearTokens } from "../../../../shared/auth/tokens";
@@ -29,7 +37,7 @@ import {
 } from "../hooks/useAttendance";
 import { useAttendanceFilters } from "../hooks/useAttendanceFilters";
 import { contentMap, type Language, type ThemeMode } from "../config/attendanceContent";
-import { getErrorDetail, useAttendanceQrGenerateMutationLocal } from "../utils/attendancePageHelpers.ts";
+import { getErrorDetail, useAttendanceQrGenerateMutationLocal } from "../utils/attendancePageHelpers";
 
 export function AttendancePage() {
   const navigate = useNavigate();
@@ -135,6 +143,28 @@ export function AttendancePage() {
   // QR generate (local hook so this page doesn't depend on a missing export)
   const qrGenerateMutation = useAttendanceQrGenerateMutationLocal();
   const createLeaveTypeMutation = useCreateLeaveTypeMutation();
+  const shiftsQuery = useShifts();
+  const createShiftMutation = useCreateShift();
+  const updateShiftMutation = useUpdateShift();
+  const deleteShiftMutation = useDeleteShift();
+  const worksitesQuery = useWorksites();
+  const createWorksiteMutation = useCreateWorksite();
+  const updateWorksiteMutation = useUpdateWorksite();
+  const deleteWorksiteMutation = useDeleteWorksite();
+
+  const [shiftName, setShiftName] = useState("");
+  const [shiftStartTime, setShiftStartTime] = useState("09:00");
+  const [shiftEndTime, setShiftEndTime] = useState("17:00");
+  const [shiftGraceMinutes, setShiftGraceMinutes] = useState("15");
+  const [shiftIsActive, setShiftIsActive] = useState(true);
+  const [editingShiftId, setEditingShiftId] = useState<number | null>(null);
+
+  const [worksiteName, setWorksiteName] = useState("");
+  const [worksiteLat, setWorksiteLat] = useState("");
+  const [worksiteLng, setWorksiteLng] = useState("");
+  const [worksiteRadius, setWorksiteRadius] = useState("100");
+  const [worksiteIsActive, setWorksiteIsActive] = useState(true);
+  const [editingWorksiteId, setEditingWorksiteId] = useState<number | null>(null);
 
   const [leaveTypeName, setLeaveTypeName] = useState("");
   const [leaveTypeCode, setLeaveTypeCode] = useState("");
@@ -147,6 +177,13 @@ export function AttendancePage() {
     () => hasPermission(userPermissions, "leaves.*"),
     [userPermissions]
   );
+  const canManageSchedule = useMemo(() => {
+    if (meData?.user?.is_superuser) return true;
+    const roleNames = (meData?.roles ?? []).map((role) =>
+      (role.slug || role.name || "").trim().toLowerCase()
+    );
+    return roleNames.includes("manager") || roleNames.includes("hr");
+  }, [meData]);
   // Approvals  
   const pendingApprovals = useAttendancePendingApprovals();
   const approveReject = useApproveAttendance();
@@ -290,6 +327,94 @@ export function AttendancePage() {
         message: getErrorDetail(error, content.notifications.qrFailedMessage),
         color: "red",
       });
+    }
+  }
+
+  function resetShiftForm() {
+    setEditingShiftId(null);
+    setShiftName("");
+    setShiftStartTime("09:00");
+    setShiftEndTime("17:00");
+    setShiftGraceMinutes("15");
+    setShiftIsActive(true);
+  }
+
+  function resetWorksiteForm() {
+    setEditingWorksiteId(null);
+    setWorksiteName("");
+    setWorksiteLat("");
+    setWorksiteLng("");
+    setWorksiteRadius("100");
+    setWorksiteIsActive(true);
+  }
+
+  async function handleSaveShift() {
+    if (!canManageSchedule) return;
+    try {
+      const payload = {
+        name: shiftName.trim(),
+        start_time: shiftStartTime,
+        end_time: shiftEndTime,
+        grace_minutes: Number(shiftGraceMinutes || 0),
+        is_active: shiftIsActive,
+      };
+      if (editingShiftId) {
+        await updateShiftMutation.mutateAsync({ id: editingShiftId, payload });
+      } else {
+        await createShiftMutation.mutateAsync(payload);
+      }
+      notifications.show({ title: content.scheduleSetup.successTitle, message: content.scheduleSetup.shiftSaved });
+      resetShiftForm();
+      await shiftsQuery.refetch();
+    } catch (error: unknown) {
+      notifications.show({ title: content.scheduleSetup.failedTitle, message: getErrorDetail(error, content.scheduleSetup.failedTitle), color: "red" });
+    }
+  }
+
+  async function handleDeleteShift(id: number) {
+    if (!canManageSchedule) return;
+    try {
+      await deleteShiftMutation.mutateAsync(id);
+      notifications.show({ title: content.scheduleSetup.successTitle, message: content.scheduleSetup.itemDeleted });
+      if (editingShiftId === id) resetShiftForm();
+      await shiftsQuery.refetch();
+    } catch (error: unknown) {
+      notifications.show({ title: content.scheduleSetup.failedTitle, message: getErrorDetail(error, content.scheduleSetup.failedTitle), color: "red" });
+    }
+  }
+
+  async function handleSaveWorksite() {
+    if (!canManageSchedule) return;
+    try {
+      const payload = {
+        name: worksiteName.trim(),
+        lat: Number(worksiteLat),
+        lng: Number(worksiteLng),
+        radius_meters: Number(worksiteRadius || 0),
+        is_active: worksiteIsActive,
+      };
+      if (editingWorksiteId) {
+        await updateWorksiteMutation.mutateAsync({ id: editingWorksiteId, payload });
+      } else {
+        await createWorksiteMutation.mutateAsync(payload);
+      }
+      notifications.show({ title: content.scheduleSetup.successTitle, message: content.scheduleSetup.worksiteSaved });
+      resetWorksiteForm();
+      await worksitesQuery.refetch();
+    } catch (error: unknown) {
+      notifications.show({ title: content.scheduleSetup.failedTitle, message: getErrorDetail(error, content.scheduleSetup.failedTitle), color: "red" });
+    }
+  }
+
+  async function handleDeleteWorksite(id: number) {
+    if (!canManageSchedule) return;
+    try {
+      await deleteWorksiteMutation.mutateAsync(id);
+      notifications.show({ title: content.scheduleSetup.successTitle, message: content.scheduleSetup.itemDeleted });
+      if (editingWorksiteId === id) resetWorksiteForm();
+      await worksitesQuery.refetch();
+    } catch (error: unknown) {
+      notifications.show({ title: content.scheduleSetup.failedTitle, message: getErrorDetail(error, content.scheduleSetup.failedTitle), color: "red" });
     }
   }
 
@@ -513,8 +638,19 @@ export function AttendancePage() {
               items={pendingApprovals.data ?? []}
               isLoading={pendingApprovals.isLoading}
               isError={pendingApprovals.isError}
+              isArabic={isArabic}
               isApproving={approveReject.isPending}
-              onApprove={(item) => handleApproval(item, "approve")}
+              labels={{
+                empty: content.approvals.empty,
+                employee: content.approvals.employee,
+                date: content.approvals.date,
+                action: content.approvals.action,
+                time: content.approvals.time,
+                distance: content.approvals.distance,
+                approve: content.approvals.approve,
+                reject: content.approvals.reject,
+              }}
+              onAction={handleApproval}
             />
           </section>
 
@@ -528,8 +664,62 @@ export function AttendancePage() {
             <p className="leave-type-form__note">{content.scheduleSetup.managerOnly}</p>
 
             <div className="schedule-grid">
-              <ShiftManagementSection />
-              <WorksiteManagementSection />
+              <ShiftManagementSection
+                title={content.scheduleSetup.shiftsTitle}
+                labels={content.scheduleSetup}
+                shiftName={shiftName}
+                shiftStartTime={shiftStartTime}
+                shiftEndTime={shiftEndTime}
+                shiftGraceMinutes={shiftGraceMinutes}
+                shiftIsActive={shiftIsActive}
+                editingShiftId={editingShiftId}
+                canManageSchedule={canManageSchedule}
+                shifts={shiftsQuery.data ?? []}
+                onShiftNameChange={setShiftName}
+                onShiftStartChange={setShiftStartTime}
+                onShiftEndChange={setShiftEndTime}
+                onShiftGraceChange={setShiftGraceMinutes}
+                onShiftActiveChange={setShiftIsActive}
+                onSaveShift={handleSaveShift}
+                onClearEdit={resetShiftForm}
+                onEditShift={(shift) => {
+                  setEditingShiftId(shift.id);
+                  setShiftName(shift.name);
+                  setShiftStartTime(shift.start_time);
+                  setShiftEndTime(shift.end_time);
+                  setShiftGraceMinutes(String(shift.grace_minutes));
+                  setShiftIsActive(Boolean(shift.is_active));
+                }}
+                onDeleteShift={handleDeleteShift}
+              />
+              <WorksiteManagementSection
+                title={content.scheduleSetup.worksitesTitle}
+                labels={content.scheduleSetup}
+                worksiteName={worksiteName}
+                worksiteLat={worksiteLat}
+                worksiteLng={worksiteLng}
+                worksiteRadius={worksiteRadius}
+                worksiteIsActive={worksiteIsActive}
+                editingWorksiteId={editingWorksiteId}
+                canManageSchedule={canManageSchedule}
+                worksites={worksitesQuery.data ?? []}
+                onWorksiteNameChange={setWorksiteName}
+                onWorksiteLatChange={setWorksiteLat}
+                onWorksiteLngChange={setWorksiteLng}
+                onWorksiteRadiusChange={setWorksiteRadius}
+                onWorksiteActiveChange={setWorksiteIsActive}
+                onSaveWorksite={handleSaveWorksite}
+                onClearEdit={resetWorksiteForm}
+                onEditWorksite={(worksite) => {
+                  setEditingWorksiteId(worksite.id);
+                  setWorksiteName(worksite.name);
+                  setWorksiteLat(worksite.lat);
+                  setWorksiteLng(worksite.lng);
+                  setWorksiteRadius(String(worksite.radius_meters));
+                  setWorksiteIsActive(Boolean(worksite.is_active));
+                }}
+                onDeleteWorksite={handleDeleteWorksite}
+              />
             </div>
           </section>
 
@@ -641,59 +831,31 @@ export function AttendancePage() {
                 {content.clearFilters}
               </button>
             </div>
-            <div className="attendance-filters">
-              <AttendanceFilters
-                filters={filters}
-                onChange={updateFilter}
-                onClear={handleClearFilters}
-              />
-              <label className="filter-field">
-                {content.departmentLabel}
-                <select
-                  value={departmentId ?? ""}
-                  onChange={(event) =>
-                    setDepartmentId(event.target.value ? event.target.value : null)
-                  }
-                >
-                  <option value="">{content.departmentPlaceholder}</option>
-                  {departmentOptions.map((option) => (
-                    <option key={option.value} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className="filter-field">
-                {content.employeeLabel}
-                <select
-                  value={employeeId ?? ""}
-                  onChange={(event) =>
-                    setEmployeeId(event.target.value ? event.target.value : null)
-                  }
-                >
-                  <option value="">{content.employeePlaceholder}</option>
-                  {employeeOptions.map((option) => (
-                    <option key={option.value} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className="filter-field">
-                {content.statusLabel}
-                <select
-                  value={status ?? ""}
-                  onChange={(event) => setStatus(event.target.value || null)}
-                >
-                  <option value="">{content.statusPlaceholder}</option>
-                  {Object.entries(content.statusMap).map(([value, label]) => (
-                    <option key={value} value={value}>
-                      {label}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            </div>
+            <AttendanceFilters
+              filters={filters}
+              departmentId={departmentId}
+              employeeId={employeeId}
+              status={status}
+              departmentOptions={departmentOptions}
+              employeeOptions={employeeOptions}
+              statusOptions={Object.entries(content.statusMap).map(([value, label]) => ({ value, label }))}
+              labels={{
+                searchLabel: content.searchLabel,
+                searchHint: content.searchHint,
+                fromLabel: content.fromLabel,
+                toLabel: content.toLabel,
+                departmentLabel: content.departmentLabel,
+                departmentPlaceholder: content.departmentPlaceholder,
+                employeeLabel: content.employeeLabel,
+                employeePlaceholder: content.employeePlaceholder,
+                statusLabel: content.statusLabel,
+                statusPlaceholder: content.statusPlaceholder,
+              }}
+              onChange={updateFilter}
+              onDepartmentChange={setDepartmentId}
+              onEmployeeChange={setEmployeeId}
+              onStatusChange={setStatus}
+            />
             {hasPartialRange && (
               <p className="range-note range-note--warn">{content.rangeIncomplete}</p>
             )}
@@ -766,6 +928,9 @@ export function AttendancePage() {
               records={attendanceQuery.data ?? []}
               isLoading={attendanceQuery.isLoading}
               isError={attendanceQuery.isError}
+              labels={content.table}
+              statusMap={content.statusMap}
+              methodMap={content.methodMap}
             />
           </section>
         </main>
