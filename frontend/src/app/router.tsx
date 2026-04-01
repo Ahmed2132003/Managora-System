@@ -11,7 +11,7 @@ import { EmployeeProfilePage } from "../pages/hr/EmployeeProfilePage.tsx";
 import { DepartmentsPage } from "../pages/hr/DepartmentsPage.tsx";
 import { JobTitlesPage } from "../pages/hr/JobTitlesPage.tsx";
 import { SelfAttendancePage } from "../pages/attendance/SelfAttendancePage.tsx";
-import { HRAttendancePage } from "../pages/hr/HRAttendancePage";
+import { AttendancePage } from "../modules/hr/attendance/pages/AttendancePage.tsx";
 import { LeaveBalancePage } from "../pages/leaves/LeaveBalancePage";
 import { LeaveMyRequestsPage } from "../pages/leaves/LeaveMyRequestsPage.tsx";
 import { LeaveRequestPage } from "../pages/leaves/LeaveRequestPage.tsx";
@@ -99,7 +99,7 @@ export const router = createBrowserRouter([
       { path: "hr/employees/:id", element: <EmployeeProfilePage /> },
       { path: "hr/departments", element: <DepartmentsPage /> },
       { path: "hr/job-titles", element: <JobTitlesPage /> },
-      { path: "hr/attendance", element: <HRAttendancePage /> },
+      { path: "hr/attendance", element: <AttendancePage /> },      
       { path: "hr/leaves/inbox", element: <LeaveInboxPage /> },
       { path: "hr/policies", element: <PoliciesPage /> },
       { path: "hr/actions", element: <HRActionsPage /> },
