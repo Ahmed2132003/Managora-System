@@ -1,4 +1,16 @@
-import { z } from "zod";
+import type { UseFormReturn } from "react-hook-form";
+import type {
+  DocumentCategory,
+  EmployeeDocument,
+  EmployeeStatus,
+  JobTitle,
+  LinkedEntityType,
+  PayrollPeriod,
+  SalaryType,
+  Shift,
+} from "../../../../shared/hr/hooks";
+
+export type { EmployeeStatus } from "../../../../shared/hr/hooks";
 
 export type Language = "en" | "ar";
 
@@ -118,8 +130,72 @@ export type PageContent = {
 
 export type EmployeeProfileTab = "basic" | "job" | "documents" | "payroll";
 
-export type EmployeeFormValues = z.input<any>;
-export type DocumentFormValues = z.input<any>;
-export type JobTitleFormValues = z.input<any>;
-export type ShiftFormValues = z.input<any>;
-export type SalaryFormValues = z.input<any>;
+export type Option<TValue extends string | number = string> = {
+  value: TValue;
+  label: string;
+};
+
+export type SimpleEntity = { id: number; name: string };
+export type UserOption = { value: string; label: string };
+
+export type EmployeeFormValues = {
+  employee_code: string;
+  full_name: string;
+  national_id?: string;
+  hire_date: string;
+  status: EmployeeStatus;
+  department_id?: string | null;
+  job_title_id?: string | null;
+  manager_id?: string | null;
+  user_id: string;
+  shift_id?: string | null;
+};
+
+export type DocumentType = "contract" | "id" | "other";
+export type DocumentFormValues = {
+  doc_type: DocumentType;
+  category: DocumentCategory;
+  linked_entity_type?: LinkedEntityType | "";
+  linked_entity_id?: string;
+  title: string;
+  file: File | null;
+};
+
+export type JobTitleFormValues = { name: string };
+export type ShiftFormValues = {
+  name: string;
+  start_time: string;
+  end_time: string;
+  grace_minutes: number;
+};
+
+export type SalaryFormValues = {
+  salary_type?: SalaryType | "";
+  basic_salary: number;
+  currency: string;
+};
+
+export type EmployeeFormReturn = UseFormReturn<EmployeeFormValues>;
+export type DocumentFormReturn = UseFormReturn<DocumentFormValues>;
+export type JobTitleFormReturn = UseFormReturn<JobTitleFormValues>;
+export type ShiftFormReturn = UseFormReturn<ShiftFormValues>;
+export type SalaryFormReturn = UseFormReturn<SalaryFormValues>;
+
+export type AttendanceStats = {
+  presentDays: number;
+  absentDays: number;
+  lateMinutes: number;
+};
+
+export type DocumentsQueryLike = {
+  isLoading: boolean;
+  data?: EmployeeDocument[];
+};
+
+export type MutationLike = {
+  isPending: boolean;
+};
+
+export type PayrollAdjustmentPeriod = PayrollPeriod;
+export type JobTitleEntity = JobTitle;
+export type ShiftEntity = Shift;

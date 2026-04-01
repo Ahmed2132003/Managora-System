@@ -1,7 +1,27 @@
 import { Button, Group, Modal, NumberInput, Stack, TextInput } from "@mantine/core";
 import { Controller } from "react-hook-form";
+import type {
+  JobTitleFormReturn,
+  MutationLike,
+  PageContent,
+  ShiftFormReturn,
+} from "../types/employeeProfile.types";
 
-export function ProfileModals(props: any) {
+type ProfileModalsProps = {
+  content: PageContent;
+  jobTitleModalOpen: boolean;
+  setJobTitleModalOpen: (open: boolean) => void;
+  jobTitleForm: JobTitleFormReturn;
+  handleCreateJobTitle: (values: unknown) => void;
+  createJobTitleMutation: MutationLike;
+  shiftModalOpen: boolean;
+  setShiftModalOpen: (open: boolean) => void;
+  shiftForm: ShiftFormReturn;
+  handleCreateShift: (values: unknown) => void;
+  createShiftMutation: MutationLike;
+};
+
+export function ProfileModals(props: ProfileModalsProps) {
   const { content, jobTitleModalOpen, setJobTitleModalOpen, jobTitleForm, handleCreateJobTitle, createJobTitleMutation, shiftModalOpen, setShiftModalOpen, shiftForm, handleCreateShift, createShiftMutation } = props;
   return <>
     <Modal opened={jobTitleModalOpen} onClose={() => setJobTitleModalOpen(false)} title={content.modals.jobTitle} centered>
