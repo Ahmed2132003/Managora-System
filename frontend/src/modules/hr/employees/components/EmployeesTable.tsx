@@ -1,32 +1,97 @@
-import { Card, Text } from "@mantine/core";
-import { DataTable } from "../../../../shared/components/DataTable";
-import { EmptyState, ErrorState, LoadingSpinner } from "@/shared/components";
+import { useNavigate } from "react-router-dom";
 import type { Employee } from "../types/employees.types";
 
 type EmployeesTableProps = {
+  title: string;
+  subtitle: string;
+  columns: {
+    code: string;
+    name: string;
+    department: string;
+    jobTitle: string;
+    status: string;
+    hireDate: string;
+    actions: string;
+    view: string;
+  };
+  statusMap: Record<string, string>;
+  loadingLabel: string;
+  emptyTitle: string;
+  emptySubtitle: string;
   data: Employee[];
   isLoading: boolean;
-  isError: boolean;
 };
 
-export function EmployeesTable({ data, isLoading, isError }: EmployeesTableProps) {
-  if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState message="Failed to load employees." />;
-  if (!data.length) return <EmptyState title="No employees" description="No employee records match your current filters." />;
+export function EmployeesTable({
+  title,
+  subtitle,
+  columns,
+  statusMap,
+  loadingLabel,
+  emptyTitle,
+  emptySubtitle,
+  data,
+  isLoading,
+}: EmployeesTableProps) {
+  const navigate = useNavigate();
 
   return (
-    <Card withBorder>
-      <Text fw={600} mb="sm">Employee Directory</Text>
-      <DataTable<Employee>
-        data={data}
-        columns={[
-          { key: "employee_code", label: "Code" },
-          { key: "full_name", label: "Name" },
-          { key: "department", label: "Department", render: (row) => row.department?.name ?? "-" },
-          { key: "job_title", label: "Job title", render: (row) => row.job_title?.name ?? "-" },
-          { key: "status", label: "Status" },
-        ]}
-      />
-    </Card>
+    <section className="panel employees-panel">
+      <div className="panel__header">
+        <div>
+          <h2>{title}</h2>
+          <p>{subtitle}</p>
+        </div>
+      </div>
+      {isLoading ? (
+        <div className="employees-state employees-state--loading">{loadingLabel}</div>
+      ) : data.length === 0 ? (
+        <div className="employees-state">
+          <strong>{emptyTitle}</strong>
+          <span>{emptySubtitle}</span>
+        </div>
+      ) : (
+        <div className="employees-table-wrapper">
+          <table className="employees-table">
+            <thead>
+              <tr>
+                <th>{columns.code}</th>
+                <th>{columns.name}</th>
+                <th>{columns.department}</th>
+                <th>{columns.jobTitle}</th>
+                <th>{columns.status}</th>
+                <th>{columns.hireDate}</th>
+                <th>{columns.actions}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {data.map((employee) => (
+                <tr key={employee.id}>
+                  <td>{employee.employee_code}</td>
+                  <td>{employee.full_name}</td>
+                  <td>{employee.department?.name ?? "-"}</td>
+                  <td>{employee.job_title?.name ?? "-"}</td>
+                  <td>
+                    <span className="status-pill" data-status={employee.status}>
+                      {statusMap[employee.status] ?? employee.status}
+                    </span>
+                  </td>
+                  <td>{employee.hire_date}</td>
+                  <td>
+                    <button
+                      type="button"
+                      className="ghost-button"
+                      onClick={() => navigate(`/hr/employees/${employee.id}`)}
+                    >
+                      {columns.view}
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </section>
   );
 }

@@ -1,29 +1,96 @@
-import { Button, Group, Select, TextInput } from "@mantine/core";
-import type { EmployeeFilters, EmployeeStatus } from "../types/employees.types";
+import type { Department, EmployeeStatus } from "../../../../shared/hr/hooks";
 
 type EmployeesFiltersProps = {
-  filters: EmployeeFilters;
+  title: string;
+  subtitle: string;
+  clearLabel: string;
+  searchLabel: string;
+  searchHint: string;
+  departmentLabel: string;
+  departmentPlaceholder: string;
+  statusLabel: string;
+  statusPlaceholder: string;
+  statusOptions: Array<{ value: EmployeeStatus; label: string }>;
+  search: string;
+  departmentId: string | null;
+  status: "" | EmployeeStatus;
+  departments: Department[];
   onSearch: (value: string) => void;
+  onDepartmentChange: (value: string | null) => void;
   onStatus: (value: "" | EmployeeStatus) => void;
   onClear: () => void;
 };
 
-export function EmployeesFilters({ filters, onSearch, onStatus, onClear }: EmployeesFiltersProps) {
+export function EmployeesFilters({
+  title,
+  subtitle,
+  clearLabel,
+  searchLabel,
+  searchHint,
+  departmentLabel,
+  departmentPlaceholder,
+  statusLabel,
+  statusPlaceholder,
+  statusOptions,
+  search,
+  departmentId,
+  status,
+  departments,
+  onSearch,
+  onDepartmentChange,
+  onStatus,
+  onClear,
+}: EmployeesFiltersProps) {
   return (
-    <Group align="end">
-      <TextInput label="Search" value={filters.search} onChange={(e) => onSearch(e.currentTarget.value)} />
-      <Select
-        label="Status"
-        value={filters.status}
-        data={[
-          { value: "", label: "All" },
-          { value: "active", label: "Active" },
-          { value: "inactive", label: "Inactive" },
-          { value: "terminated", label: "Terminated" },
-        ]}
-        onChange={(value) => onStatus((value ?? "") as "" | EmployeeStatus)}
-      />
-      <Button variant="default" onClick={onClear}>Clear</Button>
-    </Group>
+    <section className="panel employees-panel">
+      <div className="panel__header">
+        <div>
+          <h2>{title}</h2>
+          <p>{subtitle}</p>
+        </div>
+        <button type="button" className="ghost-button" onClick={onClear}>
+          {clearLabel}
+        </button>
+      </div>
+      <div className="employees-filters">
+        <label className="filter-field">
+          {searchLabel}
+          <input
+            type="text"
+            value={search}
+            onChange={(event) => onSearch(event.target.value)}
+            placeholder={searchHint}
+          />
+        </label>
+        <label className="filter-field">
+          {departmentLabel}
+          <select
+            value={departmentId ?? ""}
+            onChange={(event) => onDepartmentChange(event.target.value ? event.target.value : null)}
+          >
+            <option value="">{departmentPlaceholder}</option>
+            {departments.map((dept) => (
+              <option key={dept.id} value={String(dept.id)}>
+                {dept.name}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="filter-field">
+          {statusLabel}
+          <select
+            value={status ?? ""}
+            onChange={(event) => onStatus((event.target.value || "") as "" | EmployeeStatus)}
+          >
+            <option value="">{statusPlaceholder}</option>
+            {statusOptions.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
+    </section>
   );
 }
