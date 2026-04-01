@@ -11,6 +11,7 @@ from rest_framework.test import APITestCase
 
 from core.models import Company, Permission, Role, RolePermission, UserRole
 from hr.models import AttendanceRecord, Employee, Shift, WorkSite
+from hr.attendance.serializers import AttendanceActionSerializer, AttendanceSelfVerifyOtpSerializer
 from hr.services.attendance import check_in, check_out, generate_qr_token
 
 User = get_user_model()
@@ -235,3 +236,45 @@ class AttendancePhase4Part5ApiTests(APITestCase):
 
         self.assertEqual(res.status_code, status.HTTP_201_CREATED)
         self.assertEqual(res.data["method"], AttendanceRecord.Method.QR)
+
+
+class AttendanceCoordinatesValidationTests(TestCase):
+    def test_verify_otp_serializer_accepts_high_precision_coordinates(self):
+        serializer = AttendanceSelfVerifyOtpSerializer(
+            data={
+                "request_id": 1,
+                "code": "123456",
+                "lat": 40.712776123456,
+                "lng": -74.005974987654,
+            }
+        )
+
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+
+    def test_verify_otp_serializer_rejects_out_of_range_lat_lng(self):
+        serializer = AttendanceSelfVerifyOtpSerializer(
+            data={
+                "request_id": 1,
+                "code": "123456",
+                "lat": 91,
+                "lng": -181,
+            }
+        )
+
+        self.assertFalse(serializer.is_valid())
+        self.assertIn("lat", serializer.errors)
+        self.assertIn("lng", serializer.errors)
+
+    def test_action_serializer_rejects_out_of_range_coordinates(self):
+        serializer = AttendanceActionSerializer(
+            data={
+                "employee_id": 1,
+                "method": AttendanceRecord.Method.MANUAL,
+                "shift_id": 1,
+                "lat": -91,
+                "lng": 200,
+            }
+        )
+
+        self.assertFalse(serializer.is_valid())
+        self.assertIn("lat", serializer.errors)

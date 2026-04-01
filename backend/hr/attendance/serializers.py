@@ -66,18 +66,14 @@ class AttendanceActionSerializer(serializers.Serializer):
         allow_null=True,
     )
     method = serializers.ChoiceField(choices=AttendanceRecord.Method.choices)
-    lat = serializers.DecimalField(
-        max_digits=9,
-        decimal_places=6,
+    lat = serializers.FloatField(
         required=False,
         allow_null=True,
     )
-    lng = serializers.DecimalField(
-        max_digits=9,
-        decimal_places=6,
+    lng = serializers.FloatField(
         required=False,
         allow_null=True,
-    )
+    )    
     qr_token = serializers.CharField(required=False, allow_blank=False)
 
     def __init__(self, *args, **kwargs):
@@ -109,8 +105,13 @@ class AttendanceActionSerializer(serializers.Serializer):
                 raise serializers.ValidationError({"worksite_id": "worksite_id is required for GPS."})
             if lat is None or lng is None:
                 raise serializers.ValidationError({"location": "lat/lng is required for GPS."})
-        return attrs
 
+        if lat is not None and not (-90 <= lat <= 90):
+            raise serializers.ValidationError({"lat": "Latitude must be between -90 and 90."})
+        if lng is not None and not (-180 <= lng <= 180):
+            raise serializers.ValidationError({"lng": "Longitude must be between -180 and 180."})
+        return attrs
+    
 
 class AttendanceApprovalDecisionSerializer(serializers.Serializer):
     action = serializers.ChoiceField(choices=["checkin", "checkout"])
@@ -124,9 +125,19 @@ class AttendanceSelfRequestOtpSerializer(serializers.Serializer):
 class AttendanceSelfVerifyOtpSerializer(serializers.Serializer):
     request_id = serializers.IntegerField()
     code = serializers.CharField(min_length=6, max_length=6)
-    lat = serializers.DecimalField(max_digits=9, decimal_places=6)
-    lng = serializers.DecimalField(max_digits=9, decimal_places=6)
+    lat = serializers.FloatField()
+    lng = serializers.FloatField()
 
+    def validate_lat(self, value):
+        if not (-90 <= value <= 90):
+            raise serializers.ValidationError("Latitude must be between -90 and 90.")
+        return value
+
+    def validate_lng(self, value):
+        if not (-180 <= value <= 180):
+            raise serializers.ValidationError("Longitude must be between -180 and 180.")
+        return value
+    
 
 class AttendancePendingItemSerializer(serializers.Serializer):
     record_id = serializers.IntegerField()
