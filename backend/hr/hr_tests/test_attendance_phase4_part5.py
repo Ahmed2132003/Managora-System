@@ -7,7 +7,7 @@ from django.urls import reverse
 from django.utils import timezone
 from rest_framework import serializers, status
 from rest_framework.exceptions import PermissionDenied
-from rest_framework.test import APITestCase
+from rest_framework.test import APIRequestFactory, APITestCase
 
 from core.models import Company, Permission, Role, RolePermission, UserRole
 from hr.models import AttendanceRecord, Employee, Shift, WorkSite
@@ -240,6 +240,7 @@ class AttendancePhase4Part5ApiTests(APITestCase):
 
 class AttendanceCoordinatesValidationTests(TestCase):
     def setUp(self):
+        self.factory = APIRequestFactory()
         self.company = Company.objects.create(name="Validation Co")
         self.user = User.objects.create_user(
             username="validation-user",
@@ -264,7 +265,11 @@ class AttendanceCoordinatesValidationTests(TestCase):
             is_active=True,
         )
 
-    
+    def _request_context(self):
+        request = self.factory.post("/api/attendance/check-in/")
+        request.user = self.user
+        return {"request": request}
+
     def test_verify_otp_serializer_accepts_high_precision_coordinates(self):
         serializer = AttendanceSelfVerifyOtpSerializer(
             data={
@@ -299,9 +304,28 @@ class AttendanceCoordinatesValidationTests(TestCase):
                 "shift_id": self.shift.id,
                 "lat": -91,
                 "lng": 200,
-            }
+            },
+            context=self._request_context(),
         )
 
         self.assertFalse(serializer.is_valid())
+        self.assertIn("lat", serializer.errors)
+        self.assertIn("lng", serializer.errors)
+
+    def test_action_serializer_includes_coordinate_errors_when_fk_invalid(self):
+        serializer = AttendanceActionSerializer(
+            data={
+                "employee_id": 999999,
+                "method": AttendanceRecord.Method.MANUAL,
+                "shift_id": 888888,
+                "lat": 95,
+                "lng": -190,
+            },
+            context=self._request_context(),
+        )
+
+        self.assertFalse(serializer.is_valid())
+        self.assertIn("employee_id", serializer.errors)
+        self.assertIn("shift_id", serializer.errors)
         self.assertIn("lat", serializer.errors)
         self.assertIn("lng", serializer.errors)

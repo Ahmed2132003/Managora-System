@@ -51,17 +51,17 @@ class AttendanceRecordSerializer(serializers.ModelSerializer):
 class AttendanceActionSerializer(serializers.Serializer):
     employee_id = serializers.PrimaryKeyRelatedField(
         source="employee",
-        queryset=Employee.objects.none(),
+        queryset=Employee.objects.all(),
     )
     worksite_id = serializers.PrimaryKeyRelatedField(
         source="worksite",
-        queryset=WorkSite.objects.none(),
+        queryset=WorkSite.objects.all(),
         required=False,
         allow_null=True,
     )
     shift_id = serializers.PrimaryKeyRelatedField(
         source="shift",
-        queryset=Shift.objects.none(),
+        queryset=Shift.objects.all(),
         required=False,
         allow_null=True,
     )
@@ -106,11 +106,17 @@ class AttendanceActionSerializer(serializers.Serializer):
             if lat is None or lng is None:
                 raise serializers.ValidationError({"location": "lat/lng is required for GPS."})
 
-        if lat is not None and not (-90 <= lat <= 90):
-            raise serializers.ValidationError({"lat": "Latitude must be between -90 and 90."})
-        if lng is not None and not (-180 <= lng <= 180):
-            raise serializers.ValidationError({"lng": "Longitude must be between -180 and 180."})
         return attrs
+
+    def validate_lat(self, value):
+        if value is not None and not (-90 <= value <= 90):
+            raise serializers.ValidationError("Latitude must be between -90 and 90.")
+        return value
+
+    def validate_lng(self, value):
+        if value is not None and not (-180 <= value <= 180):
+            raise serializers.ValidationError("Longitude must be between -180 and 180.")
+        return value
     
 
 class AttendanceApprovalDecisionSerializer(serializers.Serializer):

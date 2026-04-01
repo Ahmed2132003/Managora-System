@@ -460,13 +460,13 @@ class AttendanceEmailConfigUpsertSerializer(serializers.Serializer):
 
 class AttendanceActionSerializer(serializers.Serializer):
     employee_id = serializers.PrimaryKeyRelatedField(
-        source="employee", queryset=Employee.objects.none()
+        source="employee", queryset=Employee.objects.all()
     )
     worksite_id = serializers.PrimaryKeyRelatedField(
-        source="worksite", queryset=WorkSite.objects.none(), required=False, allow_null=True
+        source="worksite", queryset=WorkSite.objects.all(), required=False, allow_null=True
     )
     shift_id = serializers.PrimaryKeyRelatedField(
-        source="shift", queryset=Shift.objects.none(), required=False, allow_null=True
+        source="shift", queryset=Shift.objects.all(), required=False, allow_null=True
     )
     method = serializers.ChoiceField(choices=AttendanceRecord.Method.choices)
     lat = serializers.DecimalField(
@@ -512,13 +512,23 @@ class AttendanceActionSerializer(serializers.Serializer):
 
         return attrs
 
+    def validate_lat(self, value):
+        if value is not None and not (Decimal("-90") <= value <= Decimal("90")):
+            raise serializers.ValidationError("Latitude must be between -90 and 90.")
+        return value
+
+    def validate_lng(self, value):
+        if value is not None and not (Decimal("-180") <= value <= Decimal("180")):
+            raise serializers.ValidationError("Longitude must be between -180 and 180.")
+        return value
+
 
 class AttendanceQrGenerateSerializer(serializers.Serializer):
     worksite_id = serializers.PrimaryKeyRelatedField(
-        source="worksite", queryset=WorkSite.objects.none(), required=False, allow_null=True
+        source="worksite", queryset=WorkSite.objects.all(), required=False, allow_null=True
     )
     shift_id = serializers.PrimaryKeyRelatedField(
-        source="shift", queryset=Shift.objects.none(), required=False, allow_null=True
+        source="shift", queryset=Shift.objects.all(), required=False, allow_null=True
     )
     expires_in_minutes = serializers.IntegerField(
         required=False, min_value=1, max_value=1440
