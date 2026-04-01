@@ -6,7 +6,7 @@ import { DashboardPage } from "../pages/DashboardPage.tsx";
 import { UsersPage } from "../pages/UsersPage.tsx";
 import { RequireAuth } from "./RequireAuth";
 import { RoleHomeRedirect } from "./RoleHomeRedirect";
-import { EmployeesPage } from "../pages/hr/EmployeesPage.tsx";
+import { EmployeesPage } from "../modules/hr/employees/pages/EmployeesPage.tsx";
 import { EmployeeProfilePage } from "../pages/hr/EmployeeProfilePage.tsx";
 import { DepartmentsPage } from "../pages/hr/DepartmentsPage.tsx";
 import { JobTitlesPage } from "../pages/hr/JobTitlesPage.tsx";
