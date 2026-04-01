@@ -239,6 +239,32 @@ class AttendancePhase4Part5ApiTests(APITestCase):
 
 
 class AttendanceCoordinatesValidationTests(TestCase):
+    def setUp(self):
+        self.company = Company.objects.create(name="Validation Co")
+        self.user = User.objects.create_user(
+            username="validation-user",
+            password="pass123",
+            company=self.company,
+        )
+        self.employee = Employee.objects.create(
+            company=self.company,
+            employee_code="VAL-EMP-1",
+            full_name="Validation Employee",
+            hire_date=date(2025, 1, 1),
+            user=self.user,
+        )
+        self.shift = Shift.objects.create(
+            company=self.company,
+            name="Validation Shift",
+            start_time=time(9, 0),
+            end_time=time(17, 0),
+            grace_minutes=10,
+            early_leave_grace_minutes=10,
+            min_work_minutes=480,
+            is_active=True,
+        )
+
+    
     def test_verify_otp_serializer_accepts_high_precision_coordinates(self):
         serializer = AttendanceSelfVerifyOtpSerializer(
             data={
@@ -268,9 +294,9 @@ class AttendanceCoordinatesValidationTests(TestCase):
     def test_action_serializer_rejects_out_of_range_coordinates(self):
         serializer = AttendanceActionSerializer(
             data={
-                "employee_id": 1,
+                "employee_id": self.employee.id,
                 "method": AttendanceRecord.Method.MANUAL,
-                "shift_id": 1,
+                "shift_id": self.shift.id,
                 "lat": -91,
                 "lng": 200,
             }
@@ -278,3 +304,4 @@ class AttendanceCoordinatesValidationTests(TestCase):
 
         self.assertFalse(serializer.is_valid())
         self.assertIn("lat", serializer.errors)
+        self.assertIn("lng", serializer.errors)
