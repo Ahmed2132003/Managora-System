@@ -7,7 +7,7 @@ import { UsersPage } from "../pages/UsersPage.tsx";
 import { RequireAuth } from "./RequireAuth";
 import { RoleHomeRedirect } from "./RoleHomeRedirect";
 import { EmployeesPage } from "../modules/hr/employees/pages/EmployeesPage.tsx";
-import { EmployeeProfilePage } from "../pages/hr/EmployeeProfilePage.tsx";
+import { EmployeeProfilePage } from "../modules/hr/employee-profile/pages/EmployeeProfilePage.tsx";
 import { DepartmentsPage } from "../modules/hr/departments/pages/DepartmentsPage.tsx";
 import { JobTitlesPage } from "../pages/hr/JobTitlesPage.tsx";
 import { SelfAttendancePage } from "../pages/attendance/SelfAttendancePage.tsx";
