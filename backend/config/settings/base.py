@@ -216,21 +216,21 @@ CORS_ALLOW_CREDENTIALS = True
 
 # Caching
 REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/1")
-CACHES = {
-    "default": {
-        "BACKEND": "django.core.cache.backends.redis.RedisCache",
-        "LOCATION": REDIS_URL,
-        "TIMEOUT": int(os.getenv("CACHE_DEFAULT_TIMEOUT", "300")),
-        "KEY_PREFIX": os.getenv("CACHE_KEY_PREFIX", "managora"),
-        "OPTIONS": {
-            "db": int(os.getenv("CACHE_REDIS_DB", "1")),
-            "pool_class": "redis.ConnectionPool",
-            "socket_connect_timeout": float(os.getenv("CACHE_SOCKET_CONNECT_TIMEOUT", "0.5")),
-            "socket_timeout": float(os.getenv("CACHE_SOCKET_TIMEOUT", "0.5")),
-            "max_connections": int(os.getenv("CACHE_MAX_CONNECTIONS", "100")),
-        },
-    }
+REDIS_CACHE = {
+    "BACKEND": "django.core.cache.backends.redis.RedisCache",
+    "LOCATION": REDIS_URL,
+    "TIMEOUT": int(os.getenv("CACHE_DEFAULT_TIMEOUT", "300")),
+    "KEY_PREFIX": os.getenv("CACHE_KEY_PREFIX", "managora"),
+    "OPTIONS": {
+        "db": int(os.getenv("CACHE_REDIS_DB", "1")),
+        "pool_class": "redis.ConnectionPool",
+        "socket_connect_timeout": float(os.getenv("CACHE_SOCKET_CONNECT_TIMEOUT", "0.5")),
+        "socket_timeout": float(os.getenv("CACHE_SOCKET_TIMEOUT", "0.5")),
+        "max_connections": int(os.getenv("CACHE_MAX_CONNECTIONS", "100")),
+        "health_check_interval": int(os.getenv("CACHE_HEALTH_CHECK_INTERVAL", "30")),
+    },
 }
+CACHES = {"default": REDIS_CACHE}
 CACHE_MIDDLEWARE_SECONDS = int(os.getenv("CACHE_MIDDLEWARE_SECONDS", "0"))
 
 # Secure file storage (Amazon S3)
@@ -300,7 +300,17 @@ LOGGING = {
             "level": os.getenv("DJANGO_REQUEST_LOG_LEVEL", "ERROR"),
             "propagate": False,
         },
-    },
+        "django.core.cache": {
+            "handlers": ["console"],
+            "level": os.getenv("CACHE_LOG_LEVEL", "WARNING"),
+            "propagate": False,
+        },
+        "celery": {
+            "handlers": ["console"],
+            "level": os.getenv("CELERY_LOG_LEVEL", "WARNING"),
+            "propagate": False,
+        },
+    },    
     "root": {
         "handlers": ["console"],
         "level": os.getenv("LOG_LEVEL", "INFO"),

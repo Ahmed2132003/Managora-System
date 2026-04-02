@@ -1,3 +1,5 @@
+import logging
+
 from django.db.models.signals import post_delete, post_save
 from django.dispatch import receiver
 
@@ -8,20 +10,28 @@ from hr.services.actions import (
     sync_hr_action_deduction_component,
 )
 
+logger = logging.getLogger(__name__)
+
 
 @receiver(post_save, sender=HRAction)
 def sync_hr_action_deduction_on_save(
     sender, instance: HRAction, **kwargs
 ) -> None:
-    sync_hr_action_deduction_component(instance)
-
+    try:
+        sync_hr_action_deduction_component(instance)
+    except Exception:
+        logger.warning("sync_hr_action_deduction_on_save failed", exc_info=True)
+        
 
 @receiver(post_delete, sender=HRAction)
 def sync_hr_action_deduction_on_delete(
     sender, instance: HRAction, **kwargs
 ) -> None:
-    remove_hr_action_deduction_component(instance)
-
+    try:
+        remove_hr_action_deduction_component(instance)
+    except Exception:
+        logger.warning("sync_hr_action_deduction_on_delete failed", exc_info=True)
+        
 
 @receiver(post_save, sender=Department)
 @receiver(post_delete, sender=Department)

@@ -22,8 +22,13 @@ except ModuleNotFoundError:  # pragma: no cover
 from cryptography.fernet import Fernet, InvalidToken
 from django.conf import settings
 from django.core import signing
-from django.core.cache import cache
 from django.utils import timezone
+
+from core.services.cache_utils import (
+    safe_cache_delete,
+    safe_cache_get,
+    safe_cache_set,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -141,7 +146,7 @@ def issue_login_temp_token(*, user_id: int, ip: str) -> str:
         "exp": (timezone.now() + timedelta(seconds=TEMP_TOKEN_TTL_SECONDS)).timestamp(),
     }
     token = signing.dumps(payload, salt="core.2fa.temp")
-    cache.set(f"2fa:temp:{payload['nonce']}", 1, timeout=TEMP_TOKEN_TTL_SECONDS)
+    safe_cache_set(f"2fa:temp:{payload['nonce']}", 1, timeout=TEMP_TOKEN_TTL_SECONDS)    
     return token
 
 
@@ -156,34 +161,34 @@ def verify_login_temp_token(*, temp_token: str, ip: str) -> int | None:
     if payload.get("ip") != ip:
         return None
     nonce = payload.get("nonce")
-    if not nonce or not cache.get(f"2fa:temp:{nonce}"):
+    if not nonce or not safe_cache_get(f"2fa:temp:{nonce}"):
         return None
-    cache.delete(f"2fa:temp:{nonce}")
+    safe_cache_delete(f"2fa:temp:{nonce}")
     return payload.get("uid")
 
 
 def record_failed_otp_attempt(*, user_id: int) -> int:
     key = f"2fa:fail:{user_id}"
-    failures = cache.get(key, 0) + 1
-    cache.set(key, failures, timeout=900)
+    failures = (safe_cache_get(key, 0) or 0) + 1
+    safe_cache_set(key, failures, timeout=900)
     return failures
 
 
 def clear_failed_otp_attempts(*, user_id: int) -> None:
-    cache.delete(f"2fa:fail:{user_id}")
-
+    safe_cache_delete(f"2fa:fail:{user_id}")
+    
 
 def is_otp_temporarily_blocked(*, user_id: int) -> bool:
     block_key = f"2fa:block:{user_id}"
-    return bool(cache.get(block_key))
+    return bool(safe_cache_get(block_key))
+
 
 
 def maybe_block_user_after_failures(*, user_id: int, threshold: int = 10, block_minutes: int = 15) -> None:
     failures = record_failed_otp_attempt(user_id=user_id)
     if failures >= threshold:
-        cache.set(f"2fa:block:{user_id}", 1, timeout=block_minutes * 60)
+        safe_cache_set(f"2fa:block:{user_id}", 1, timeout=block_minutes * 60)
         logger.warning("2FA temporarily blocked", extra={"user_id": user_id, "failures": failures})
-
 
 def log_suspicious_activity(*, event: str, metadata: dict) -> None:
     logger.warning("Suspicious activity detected", extra={"event": event, "metadata": json.dumps(metadata)})

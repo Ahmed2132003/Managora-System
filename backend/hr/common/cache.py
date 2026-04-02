@@ -18,9 +18,10 @@ CACHE_VERSION: Final[str] = "v1"
 
 def build_cache_key(*, resource: str, company_id: int | None = None, suffix: str = "") -> str:
     """Build a versioned cache key."""
+    resource_part = str(resource).strip().replace(" ", "_")
     company_part = f"company:{company_id}" if company_id is not None else "all"
-    suffix_part = f":{suffix}" if suffix else ""
-    return f"{resource}:{company_part}:{CACHE_VERSION}{suffix_part}"
+    suffix_part = f":{str(suffix).strip().replace(' ', '_')}" if suffix else ""
+    return f"hr:{resource_part}:{company_part}:{CACHE_VERSION}{suffix_part}"
 
 
 T = TypeVar("T")
