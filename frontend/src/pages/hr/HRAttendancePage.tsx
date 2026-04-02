@@ -1,1 +1,1 @@
-//تم نقل الملف وتقسيمه في مجلد الموديولز 
+//The file was extracted to the module folder and split into a folder containing its files.
