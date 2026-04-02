@@ -317,3 +317,4 @@ export function useDashboardData(content: Content, isArabic: boolean) {
     restoreBackupMutation,
   };
 }
+export type DashboardDataState = ReturnType<typeof useDashboardData>;

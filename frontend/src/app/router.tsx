@@ -2,7 +2,7 @@ import { Suspense, lazy } from "react";
 import { createBrowserRouter, Navigate } from "react-router-dom";
 import { AppLayout } from "../shared/ui/AppLayout.tsx";
 import { LoginPage } from "../pages/LoginPage.tsx";
-import { DashboardPage } from "../pages/DashboardPage.tsx";
+import { DashboardPage } from "../modules/dashboard/pages/DashboardPage.tsx";
 import { UsersPage } from "../pages/UsersPage.tsx";
 import { RequireAuth } from "./RequireAuth";
 import { RoleHomeRedirect } from "./RoleHomeRedirect";
