@@ -14,7 +14,7 @@ import { SelfAttendancePage } from "../pages/attendance/SelfAttendancePage.tsx";
 import { AttendancePage } from "../modules/hr/attendance/pages/AttendancePage.tsx";
 import { LeaveBalancePage } from "../modules/leaves/balance/pages/LeaveBalancePage";
 import { LeaveMyRequestsPage } from "../modules/leaves/my-requests/pages/LeaveMyRequestsPage.tsx";
-import { LeaveRequestPage } from "../pages/leaves/LeaveRequestPage.tsx";
+import { LeaveRequestPage } from "../modules/leaves/request/pages/LeaveRequestPage.tsx";
 import { LeaveInboxPage } from "../modules/hr/leave-inbox/pages/LeaveInboxPage.tsx";
 import { PoliciesPage } from "../modules/hr/policies/pages/PoliciesPage.tsx";
 import { HRActionsPage } from "../modules/hr/hr-actions/pages/HRActionsPage.tsx";
