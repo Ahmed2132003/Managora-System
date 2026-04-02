@@ -3,7 +3,7 @@ import { createBrowserRouter, Navigate } from "react-router-dom";
 import { AppLayout } from "../shared/ui/AppLayout.tsx";
 import { LoginPage } from "../modules/auth/pages/LoginPage.tsx";
 import { DashboardPage } from "../modules/dashboard/pages/DashboardPage.tsx";
-import { UsersPage } from "../pages/UsersPage.tsx";
+import { UsersPage } from "../modules/users/pages/UsersPage.tsx";
 import { RequireAuth } from "./RequireAuth";
 import { RoleHomeRedirect } from "./RoleHomeRedirect";
 import { EmployeesPage } from "../modules/hr/employees/pages/EmployeesPage.tsx";
