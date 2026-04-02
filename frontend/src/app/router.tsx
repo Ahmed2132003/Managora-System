@@ -19,7 +19,7 @@ import { LeaveInboxPage } from "../modules/hr/leave-inbox/pages/LeaveInboxPage.t
 import { PoliciesPage } from "../pages/hr/PoliciesPage.tsx";
 import { HRActionsPage } from "../modules/hr/hr-actions/pages/HRActionsPage.tsx";
 import { PayrollPage } from "../modules/hr/payroll/pages/PayrollPage";
-import { PayrollPeriodDetailsPage } from "../pages/hr/PayrollPeriodDetailsPage";
+import { PayrollPeriodDetailsPage } from "../modules/hr/payroll/period-details/pages/PayrollPeriodDetailsPage";
 import { AccountingSetupWizardPage } from "../pages/accounting/AccountingSetupWizardPage";
 import { JournalEntriesPage } from "../pages/accounting/JournalEntriesPage.tsx";
 import { JournalEntryDetailsPage } from "../pages/accounting/JournalEntryDetailsPage.tsx";
