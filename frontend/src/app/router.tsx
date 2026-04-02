@@ -15,7 +15,7 @@ import { AttendancePage } from "../modules/hr/attendance/pages/AttendancePage.ts
 import { LeaveBalancePage } from "../pages/leaves/LeaveBalancePage";
 import { LeaveMyRequestsPage } from "../pages/leaves/LeaveMyRequestsPage.tsx";
 import { LeaveRequestPage } from "../pages/leaves/LeaveRequestPage.tsx";
-import { LeaveInboxPage } from "../pages/hr/LeaveInboxPage.tsx";
+import { LeaveInboxPage } from "../modules/hr/leave-inbox/pages/LeaveInboxPage.tsx";
 import { PoliciesPage } from "../pages/hr/PoliciesPage.tsx";
 import { HRActionsPage } from "../modules/hr/hr-actions/pages/HRActionsPage.tsx";
 import { PayrollPage } from "../modules/hr/payroll/pages/PayrollPage";
