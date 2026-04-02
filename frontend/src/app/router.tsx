@@ -13,7 +13,7 @@ import { JobTitlesPage } from "../modules/hr/job-titles/pages/JobTitlesPage.tsx"
 import { SelfAttendancePage } from "../pages/attendance/SelfAttendancePage.tsx";
 import { AttendancePage } from "../modules/hr/attendance/pages/AttendancePage.tsx";
 import { LeaveBalancePage } from "../modules/leaves/balance/pages/LeaveBalancePage";
-import { LeaveMyRequestsPage } from "../pages/leaves/LeaveMyRequestsPage.tsx";
+import { LeaveMyRequestsPage } from "../modules/leaves/my-requests/pages/LeaveMyRequestsPage.tsx";
 import { LeaveRequestPage } from "../pages/leaves/LeaveRequestPage.tsx";
 import { LeaveInboxPage } from "../modules/hr/leave-inbox/pages/LeaveInboxPage.tsx";
 import { PoliciesPage } from "../modules/hr/policies/pages/PoliciesPage.tsx";
