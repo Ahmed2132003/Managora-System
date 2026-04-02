@@ -10,7 +10,7 @@ import { EmployeesPage } from "../modules/hr/employees/pages/EmployeesPage.tsx";
 import { EmployeeProfilePage } from "../modules/hr/employee-profile/pages/EmployeeProfilePage.tsx";
 import { DepartmentsPage } from "../modules/hr/departments/pages/DepartmentsPage.tsx";
 import { JobTitlesPage } from "../modules/hr/job-titles/pages/JobTitlesPage.tsx";
-import { SelfAttendancePage } from "../pages/attendance/SelfAttendancePage.tsx";
+import { SelfAttendancePage } from "../modules/attendance/self/pages/SelfAttendancePage.tsx";
 import { AttendancePage } from "../modules/hr/attendance/pages/AttendancePage.tsx";
 import { LeaveBalancePage } from "../modules/leaves/balance/pages/LeaveBalancePage";
 import { LeaveMyRequestsPage } from "../modules/leaves/my-requests/pages/LeaveMyRequestsPage.tsx";
