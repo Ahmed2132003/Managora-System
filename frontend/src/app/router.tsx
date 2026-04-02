@@ -17,7 +17,7 @@ import { LeaveMyRequestsPage } from "../pages/leaves/LeaveMyRequestsPage.tsx";
 import { LeaveRequestPage } from "../pages/leaves/LeaveRequestPage.tsx";
 import { LeaveInboxPage } from "../pages/hr/LeaveInboxPage.tsx";
 import { PoliciesPage } from "../pages/hr/PoliciesPage.tsx";
-import { HRActionsPage } from "../pages/hr/HRActionsPage.tsx";
+import { HRActionsPage } from "../modules/hr/hr-actions/pages/HRActionsPage.tsx";
 import { PayrollPage } from "../modules/hr/payroll/pages/PayrollPage";
 import { PayrollPeriodDetailsPage } from "../pages/hr/PayrollPeriodDetailsPage";
 import { AccountingSetupWizardPage } from "../pages/accounting/AccountingSetupWizardPage";
