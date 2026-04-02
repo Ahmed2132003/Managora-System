@@ -55,3 +55,27 @@ One platform for HR + Attendance + Payroll + Accounting + Dashboards (10–300 e
 DEFAULT_FROM_EMAIL`
 ### Frontend environment variables
 - `VITE_WEB_PUSH_PUBLIC_KEY` (required to enable browser push subscription from the Messages page)."# Managora-System" 
+
+## Phase 8: Performance Optimization
+
+### Redis Caching (HR Reference Data)
+- Cached datasets:
+  - Departments
+  - Job Titles
+  - Leave Types
+- Caching is implemented in the HR service layer (`hr/employees/services.py`, `hr/leaves/services.py`) using centralized helpers in `hr/common/cache.py`.
+- Cache keys are versioned and company-scoped (example: `departments:company:12:v1`).
+- Invalidation is granular via Django signals on create/update/delete for the affected model only.
+
+### Celery Background Processing
+- Redis is used as Celery broker and result backend.
+- Payroll generation is executed asynchronously via `hr.payroll.tasks.generate_payroll_period`.
+- Analytics reports can be dispatched asynchronously via `analytics.tasks.run_analytics_report`.
+- Task lifecycle monitoring hooks are wired with Celery signals (`task_prerun`, `task_postrun`, `task_failure`) in `core/celery_signals.py`.
+
+### Running workers
+```bash
+cd backend
+celery -A config worker -l info
+celery -A config beat -l info
+```

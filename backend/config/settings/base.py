@@ -215,15 +215,23 @@ CORS_ALLOWED_ORIGIN_REGEXES = [
 CORS_ALLOW_CREDENTIALS = True
 
 # Caching
-REDIS_URL = os.getenv("REDIS_URL", "")
+REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/1")
 CACHES = {
     "default": {
-        "BACKEND": "django_redis.cache.RedisCache" if REDIS_URL else "django.core.cache.backends.locmem.LocMemCache",
-        "LOCATION": REDIS_URL or "locmem://",
-        "OPTIONS": {"CLIENT_CLASS": "django_redis.client.DefaultClient"} if REDIS_URL else {},
+        "BACKEND": "django.core.cache.backends.redis.RedisCache",
+        "LOCATION": REDIS_URL,
+        "TIMEOUT": int(os.getenv("CACHE_DEFAULT_TIMEOUT", "300")),
+        "KEY_PREFIX": os.getenv("CACHE_KEY_PREFIX", "managora"),
+        "OPTIONS": {
+            "db": int(os.getenv("CACHE_REDIS_DB", "1")),
+            "pool_class": "redis.ConnectionPool",
+            "socket_connect_timeout": float(os.getenv("CACHE_SOCKET_CONNECT_TIMEOUT", "0.5")),
+            "socket_timeout": float(os.getenv("CACHE_SOCKET_TIMEOUT", "0.5")),
+            "max_connections": int(os.getenv("CACHE_MAX_CONNECTIONS", "100")),
+        },
     }
 }
-CACHE_TTL = int(os.getenv("CACHE_TTL", "60"))
+CACHE_MIDDLEWARE_SECONDS = int(os.getenv("CACHE_MIDDLEWARE_SECONDS", "0"))
 
 # Secure file storage (Amazon S3)
 AWS_ACCESS_KEY_ID = os.getenv("AWS_ACCESS_KEY_ID", "")
@@ -247,6 +255,11 @@ CELERY_ACCEPT_CONTENT = ["json"]
 CELERY_TASK_SERIALIZER = "json"
 CELERY_RESULT_SERIALIZER = "json"
 CELERY_TIMEZONE = TIME_ZONE
+CELERY_TASK_TRACK_STARTED = True
+CELERY_TASK_TIME_LIMIT = int(os.getenv("CELERY_TASK_TIME_LIMIT", "1800"))
+CELERY_TASK_SOFT_TIME_LIMIT = int(os.getenv("CELERY_TASK_SOFT_TIME_LIMIT", "1500"))
+CELERY_TASK_ALWAYS_EAGER = TESTING or (os.getenv("CELERY_TASK_ALWAYS_EAGER", "0") == "1")
+CELERY_TASK_EAGER_PROPAGATES = os.getenv("CELERY_TASK_EAGER_PROPAGATES", "1") == "1"
 
 CELERY_BEAT_SCHEDULE = {
     "analytics-build-yesterday": {

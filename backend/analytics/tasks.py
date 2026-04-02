@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from datetime import date, datetime, timedelta
 from decimal import Decimal
 
@@ -118,6 +119,8 @@ ALERT_RECOMMENDATIONS = {
         "Escalate high-risk accounts to collections.",
     ],
 }
+
+logger = logging.getLogger(__name__)
 
 
 def _coerce_date(value: date | str) -> date:
@@ -598,3 +601,53 @@ def detect_anomalies(company_id: int, target_date: str | date) -> int:
                 created_events += 1
 
     return created_events
+
+
+@shared_task(bind=True, max_retries=3, default_retry_delay=30)
+def run_analytics_report(
+    self,
+    report_type: str,
+    company_id: int,
+    params: dict | None = None,
+) -> dict[str, str]:
+    """Run analytics reports asynchronously with retries."""
+    params = params or {}
+
+    try:
+        if report_type == "daily_kpis":
+            target_date = params.get("target_date", str(timezone.localdate()))
+            result = build_kpis_daily(company_id, target_date)
+        elif report_type == "contributions":
+            target_date = params.get("target_date", str(timezone.localdate()))
+            count = build_kpi_contributions_daily(company_id, target_date)
+            result = {"status": "ok", "contributions": str(count)}
+        elif report_type == "range":
+            start_date = params["start_date"]
+            end_date = params["end_date"]
+            result = build_analytics_range(company_id, start_date, end_date)
+        elif report_type == "anomalies":
+            target_date = params.get("target_date", str(timezone.localdate()))
+            created = detect_anomalies(company_id, target_date)
+            result = {"status": "ok", "events_created": str(created)}
+        else:
+            raise ValueError(f"Unsupported report_type: {report_type}")
+
+        logger.info(
+            "Analytics report task completed",
+            extra={
+                "task_id": self.request.id,
+                "company_id": company_id,
+                "report_type": report_type,
+            },
+        )
+        return result
+    except Exception as exc:
+        logger.exception(
+            "Analytics report task failed",
+            extra={
+                "task_id": self.request.id,
+                "company_id": company_id,
+                "report_type": report_type,
+            },
+        )
+        raise self.retry(exc=exc)

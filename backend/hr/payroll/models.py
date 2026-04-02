@@ -292,3 +292,40 @@ class PayrollLine(BaseModel):
 
     def __str__(self):
         return f"{self.company.name} - {self.code} - {self.amount}"
+
+
+class PayrollTaskRun(BaseModel):
+    """Stores background payroll generation task lifecycle for user feedback."""
+
+    class Status(models.TextChoices):
+        PENDING = "pending", "Pending"
+        RUNNING = "running", "Running"
+        SUCCESS = "success", "Success"
+        FAILED = "failed", "Failed"
+
+    task_id = models.CharField(max_length=255, unique=True)
+    period = models.ForeignKey(
+        "hr.PayrollPeriod",
+        on_delete=models.CASCADE,
+        related_name="task_runs",
+    )
+    requested_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="payroll_task_runs",
+    )
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDING)
+    result = models.JSONField(default=dict, blank=True)
+    error = models.TextField(blank=True, default="")
+
+    class Meta:
+        app_label = "hr"
+        indexes = [
+            models.Index(fields=["company", "status"], name="pay_task_comp_status_idx"),
+            models.Index(fields=["period", "created_at"], name="pay_task_period_created_idx"),
+        ]
+
+    def save(self, *args, **kwargs):
+        if self.period_id:
+            self.company_id = self.period.company_id
+        super().save(*args, **kwargs)

@@ -41,6 +41,7 @@ from hr.payroll.models import (
     PayrollLine,
     PayrollPeriod,
     PayrollRun,
+    PayrollTaskRun,
     SalaryComponent,
     SalaryStructure,
 )
@@ -65,6 +66,7 @@ __all__ = [
     "PayrollLine",
     "PayrollPeriod",
     "PayrollRun",
+    "PayrollTaskRun",    
     "PolicyRule",
     "SalaryComponent",
     "SalaryStructure",

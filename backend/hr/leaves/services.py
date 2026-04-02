@@ -6,7 +6,8 @@ Provides explicit leave service APIs while preserving existing service exports.
 from django.db import transaction
 from rest_framework import serializers
 
-from hr.models import LeaveRequest
+from hr.common.cache import LEAVE_TYPES_TTL, build_cache_key, cache_get, cache_set
+from hr.models import LeaveRequest, LeaveType
 from hr.services.leaves import (
     approve_leave as _approve_leave,
     calculate_leave_days,
@@ -15,6 +16,41 @@ from hr.services.leaves import (
     _request_leave,
     validate_leave_overlap,
 )
+
+
+def list_leave_types(company_id: int, *, include_inactive: bool = False) -> list[dict]:
+    """Return cached leave types per company with active/inactive filter support."""
+    key = build_cache_key(
+        resource="leave_types",
+        company_id=company_id,
+        suffix="all" if include_inactive else "active",
+    )
+    cached = cache_get(key)
+    if cached is not None:
+        return cached
+
+    queryset = LeaveType.objects.filter(company_id=company_id)
+    if not include_inactive:
+        queryset = queryset.filter(is_active=True)
+
+    leave_types = list(
+        queryset.order_by("id").values(
+            "id",
+            "name",
+            "code",
+            "requires_approval",
+            "paid",
+            "requires_balance",
+            "max_per_request_days",
+            "allow_negative_balance",
+            "strict_balance",
+            "is_active",
+            "company_id",
+        )
+    )
+    cache_set(key, leave_types, LEAVE_TYPES_TTL)
+    return leave_types
+
 
 
 @transaction.atomic
@@ -112,5 +148,6 @@ __all__ = [
     "calculate_leave_days",
     "get_or_create_balance",
     "validate_leave_overlap",
+    "list_leave_types",
     
 ]

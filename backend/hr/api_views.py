@@ -47,6 +47,7 @@ from hr.models import (
     CommissionRequest,
     PayrollPeriod,
     PayrollRun,
+    PayrollTaskRun,    
     SalaryComponent,
     PolicyRule,
     SalaryStructure,
@@ -61,6 +62,7 @@ from hr.attendance.services import (
     approve_attendance_action,
     reject_attendance_action,
 )
+from hr.employees.services import list_departments, list_job_titles
 from hr.services.defaults import ensure_default_shifts, get_company_manager, get_default_shift
 from hr.serializers import (
     DepartmentSerializer,
@@ -101,8 +103,14 @@ from hr.serializers import (
     UserMiniSerializer,
     LoanAdvanceSerializer,
 )
-from hr.services.generator import generate_period
-from hr.leaves.services import approve_leave, reject_leave, request_leave, cancel_leave
+from hr.payroll.tasks import generate_payroll_period
+from hr.leaves.services import (
+    approve_leave,
+    cancel_leave,
+    list_leave_types,
+    reject_leave,
+    request_leave,
+)    
 from hr.services.lock import lock_period
 from hr.services.payslip import render_payslip_pdf
 import re
@@ -131,6 +139,13 @@ class DepartmentViewSet(PermissionByActionMixin, CompanyScopedViewSet):
 
     queryset = Department.objects.all()
 
+    def list(self, request, *args, **kwargs):
+        payload = list_departments(request.user.company_id)
+        page = self.paginate_queryset(payload)
+        if page is not None:
+            return self.get_paginated_response(page)
+        return Response(payload)
+    
 @extend_schema_view(
     list=extend_schema(tags=["Job Titles"], summary="List job titles"),
     retrieve=extend_schema(tags=["Job Titles"], summary="Retrieve job title"),
@@ -152,6 +167,13 @@ class JobTitleViewSet(PermissionByActionMixin, CompanyScopedViewSet):
 
     queryset = JobTitle.objects.all()
     
+    def list(self, request, *args, **kwargs):
+        payload = list_job_titles(request.user.company_id)
+        page = self.paginate_queryset(payload)
+        if page is not None:
+            return self.get_paginated_response(page)
+        return Response(payload)
+        
 
 
 
@@ -1283,6 +1305,17 @@ class LeaveTypeViewSet(CompanyScopedViewSet):
         )
         return queryset    
 
+    def list(self, request, *args, **kwargs):
+        include_inactive = user_has_permission(request.user, "leaves.*")
+        payload = list_leave_types(
+            request.user.company_id,
+            include_inactive=include_inactive,
+        )
+        page = self.paginate_queryset(payload)
+        if page is not None:
+            return self.get_paginated_response(page)
+        return Response(payload)
+    
 
 @extend_schema_view(
     list=extend_schema(tags=["Leaves"], summary="List leave balances"),
@@ -1780,13 +1813,23 @@ class PayrollPeriodGenerateView(APIView):
 
     def post(self, request, id=None):
         period = get_object_or_404(PayrollPeriod, id=id, company=request.user.company)
-        summary = generate_period(
-            company=request.user.company,
-            actor=request.user,
-            period=period,
+        async_result = generate_payroll_period.delay(
+            period_id=period.id,
+            user_id=request.user.id,
         )
-        return Response(summary)
-
+        PayrollTaskRun.objects.create(
+            task_id=async_result.id,
+            period=period,
+            requested_by=request.user,
+            status=PayrollTaskRun.Status.PENDING,
+        )
+        if settings.CELERY_TASK_ALWAYS_EAGER:
+            return Response(async_result.result)
+        return Response(
+            {"task_id": async_result.id, "status": PayrollTaskRun.Status.PENDING},
+            status=status.HTTP_202_ACCEPTED,
+        )
+        
 
 @extend_schema(
     tags=["Payroll"],
