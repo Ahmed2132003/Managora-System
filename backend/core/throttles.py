@@ -1,10 +1,22 @@
+import logging
+
+from django.core.cache import caches
 from django.contrib.auth import get_user_model
 from django.conf import settings
 from rest_framework.settings import api_settings
 from rest_framework.throttling import SimpleRateThrottle, UserRateThrottle
 
+try:
+    from redis.exceptions import ConnectionError as RedisConnectionError
+    from redis.exceptions import TimeoutError as RedisTimeoutError
+except Exception:  # pragma: no cover - redis should exist, this is a hardening fallback.
+    RedisConnectionError = OSError
+    RedisTimeoutError = TimeoutError
 
-class _DefaultRateMixin:
+logger = logging.getLogger(__name__)
+
+
+class _DefaultRateMixin:    
     """Provide a sane fallback rate when the scope is absent from settings."""
 
     default_rate = None
@@ -15,15 +27,40 @@ class _DefaultRateMixin:
 
 
 class ThrottlingToggleMixin:
+    def _resolve_fallback_cache(self):
+        fallback_alias = getattr(settings, "THROTTLE_FALLBACK_CACHE_ALIAS", "locmem")
+        try:
+            return caches[fallback_alias]
+        except Exception:
+            return caches["default"]
+
     def allow_request(self, request, view):
         if getattr(request, "method", "").upper() == "OPTIONS":
             return True
-        if getattr(settings, "DISABLE_THROTTLING", False) and not getattr(settings, "TESTING", False):            
+        if getattr(settings, "DISABLE_THROTTLING", False) and not getattr(settings, "TESTING", False):
             return True
-        return super().allow_request(request, view)
+        try:
+            return super().allow_request(request, view)
+        except (RedisConnectionError, RedisTimeoutError, ConnectionError, OSError) as exc:
+            # Never fail auth/critical endpoints due to a temporary cache outage.
+            self.cache = self._resolve_fallback_cache()
+            logger.warning(
+                "Throttle cache backend unavailable (%s). Falling back to '%s' cache alias for %s.",
+                exc,
+                getattr(settings, "THROTTLE_FALLBACK_CACHE_ALIAS", "locmem"),
+                self.__class__.__name__,
+            )
+            try:
+                return super().allow_request(request, view)
+            except Exception as fallback_exc:
+                logger.warning(
+                    "Throttle fallback cache failed (%s). Allowing request to keep endpoint available.",
+                    fallback_exc,
+                )
+                return True
 
 
-class ReadWriteUserRateThrottle(ThrottlingToggleMixin, UserRateThrottle):
+class ReadWriteUserRateThrottle(ThrottlingToggleMixin, UserRateThrottle):    
     """
     Use relaxed limits for read traffic and stricter limits for write traffic.
     """

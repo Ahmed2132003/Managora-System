@@ -215,10 +215,13 @@ CORS_ALLOWED_ORIGIN_REGEXES = [
 CORS_ALLOW_CREDENTIALS = True
 
 # Caching
-REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/1")
+DEFAULT_REDIS_HOST = "redis" if Path("/.dockerenv").exists() else "localhost"
+DEFAULT_REDIS_PORT = os.getenv("REDIS_PORT", "6379")
+DEFAULT_REDIS_DB = os.getenv("CACHE_REDIS_DB", "1")
+REDIS_URL = os.getenv("REDIS_URL", f"redis://{DEFAULT_REDIS_HOST}:{DEFAULT_REDIS_PORT}/{DEFAULT_REDIS_DB}")
 REDIS_CACHE = {
     "BACKEND": "django.core.cache.backends.redis.RedisCache",
-    "LOCATION": REDIS_URL,
+    "LOCATION": REDIS_URL,    
     "TIMEOUT": int(os.getenv("CACHE_DEFAULT_TIMEOUT", "300")),
     "KEY_PREFIX": os.getenv("CACHE_KEY_PREFIX", "managora"),
     "OPTIONS": {
@@ -232,12 +235,20 @@ REDIS_CACHE = {
 }
 LOCMEM_CACHE = {
     "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
-    "LOCATION": os.getenv("LOCMEM_CACHE_LOCATION", "managora-test-cache"),
+    "LOCATION": os.getenv("LOCMEM_CACHE_LOCATION", "managora-fallback-cache"),
     "TIMEOUT": int(os.getenv("CACHE_DEFAULT_TIMEOUT", "300")),
     "KEY_PREFIX": os.getenv("CACHE_KEY_PREFIX", "managora"),
 }
 
-CACHES = {"default": LOCMEM_CACHE if TESTING else REDIS_CACHE}
+# Keep both aliases available so critical request paths can gracefully fall back
+# when Redis is temporarily unavailable.
+USE_REDIS_CACHE = os.getenv("USE_REDIS_CACHE", "1") == "1"
+CACHES = {
+    "default": REDIS_CACHE if (USE_REDIS_CACHE and not TESTING) else LOCMEM_CACHE,
+    "redis": REDIS_CACHE,
+    "locmem": LOCMEM_CACHE,
+}
+THROTTLE_FALLBACK_CACHE_ALIAS = os.getenv("THROTTLE_FALLBACK_CACHE_ALIAS", "locmem")
 CACHE_MIDDLEWARE_SECONDS = int(os.getenv("CACHE_MIDDLEWARE_SECONDS", "0"))
 
 # Secure file storage (Amazon S3)
@@ -256,7 +267,8 @@ if USE_S3_MEDIA_STORAGE and AWS_STORAGE_BUCKET_NAME:
     DEFAULT_FILE_STORAGE = "storages.backends.s3boto3.S3Boto3Storage"
     
 # Celery
-CELERY_BROKER_URL = os.getenv("CELERY_BROKER_URL", "redis://localhost:6379/0")
+DEFAULT_CELERY_REDIS_URL = f"redis://{DEFAULT_REDIS_HOST}:{DEFAULT_REDIS_PORT}/0"
+CELERY_BROKER_URL = os.getenv("CELERY_BROKER_URL", DEFAULT_CELERY_REDIS_URL)
 CELERY_RESULT_BACKEND = os.getenv("CELERY_RESULT_BACKEND", CELERY_BROKER_URL)
 CELERY_ACCEPT_CONTENT = ["json"]
 CELERY_TASK_SERIALIZER = "json"

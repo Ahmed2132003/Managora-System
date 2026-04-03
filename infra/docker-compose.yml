@@ -17,8 +17,26 @@ services:
       interval: 5s
       timeout: 3s
       retries: 20
+    networks:
+      - app_net
 
-  backend:
+  redis:
+    image: redis:7-alpine
+    container_name: managora_redis
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "6379:6379"
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    networks:
+      - app_net
+
+  backend:  
     build:
       context: ../backend
       dockerfile: Dockerfile
@@ -49,9 +67,12 @@ services:
       ATTENDANCE_OTP_APP_PASSWORD: ${ATTENDANCE_OTP_APP_PASSWORD}
       ATTENDANCE_OTP_SMTP_HOST: ${ATTENDANCE_OTP_SMTP_HOST:-smtp.gmail.com}
       ATTENDANCE_OTP_SMTP_PORT: ${ATTENDANCE_OTP_SMTP_PORT:-587}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379/1}
+      CELERY_BROKER_URL: ${CELERY_BROKER_URL:-redis://redis:6379/0}
+      CELERY_RESULT_BACKEND: ${CELERY_RESULT_BACKEND:-redis://redis:6379/0}
 
       # مهم جدًا عشان تقسيم settings
-      DJANGO_SETTINGS_MODULE: config.settings.dev
+      DJANGO_SETTINGS_MODULE: config.settings.dev      
     ports:
       - "8001:8001"      
     volumes:
@@ -61,8 +82,12 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - app_net
 
-    # Bootstrap: نخليه ماسك نفسه لحد ما نولّد المشروع
+    # Bootstrap: نخليه ماسك نفسه لحد ما نولّد المشروع    
     command: >
       sh -c "
       python manage.py migrate &&
@@ -81,9 +106,16 @@ services:
       - /app/node_modules
     depends_on:
       - backend
+    networks:
+      - app_net
     command: >
       sh -c "npm install && npm run dev -- --host 0.0.0.0 --port 5173"
 
 volumes:
   pgdata:
   backend_media:
+  redisdata:
+
+networks:
+  app_net:
+    driver: bridge
