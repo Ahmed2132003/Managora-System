@@ -412,13 +412,23 @@ class LoanAdvanceViewSet(PermissionByActionMixin, CompanyScopedViewSet):
                 
         employee_id = self.request.query_params.get("employee")
         status_filter = self.request.query_params.get("status")
+        date_from = _parse_date_param(
+            self.request.query_params.get("date_from"), "date_from"
+        )
+        date_to = _parse_date_param(
+            self.request.query_params.get("date_to"), "date_to"
+        )
         if employee_id:
             queryset = queryset.filter(employee_id=employee_id)
         if status_filter:
             queryset = queryset.filter(status=status_filter)
+        if date_from:
+            queryset = queryset.filter(start_date__gte=date_from)
+        if date_to:
+            queryset = queryset.filter(start_date__lte=date_to)
         queryset = _restrict_adjustment_queryset(
             self.request.user, queryset, "employee"
-        )
+        )        
         return queryset.order_by("id")
     queryset = LoanAdvance.objects.all()
 

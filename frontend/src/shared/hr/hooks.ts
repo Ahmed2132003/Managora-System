@@ -795,8 +795,10 @@ export function useUpdateSalaryComponent() {
 export function useLoanAdvancesQuery(params?: {
   employeeId?: number | null;
   status?: "active" | "closed";
+  dateFrom?: string;
+  dateTo?: string;
   enabled?: boolean;
-}) {
+}) {  
   return useQuery({
     queryKey: ["hr", "loan-advances", params],
     enabled: params?.enabled ?? true,
@@ -807,9 +809,11 @@ export function useLoanAdvancesQuery(params?: {
           params: {
             employee: params?.employeeId ?? undefined,
             status: params?.status ?? undefined,
+            date_from: params?.dateFrom ?? undefined,
+            date_to: params?.dateTo ?? undefined,
           },
         }
-      );
+      );      
       if (Array.isArray(response.data)) {
         return response.data;
       }

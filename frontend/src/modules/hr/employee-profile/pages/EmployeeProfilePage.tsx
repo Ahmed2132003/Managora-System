@@ -758,12 +758,7 @@ export function EmployeeProfilePage() {
     salaryStructureId: salaryStructure?.id ?? null,
     enabled: Boolean(salaryStructure?.id),
   });
-  const loanAdvancesQuery = useLoanAdvancesQuery({
-    employeeId,
-    status: "active",
-    enabled: Boolean(employeeId),
-  });
-  // Keep the period filter local to the summary section so no other employee tabs are affected.
+  // Keep the period filter local to the summary section so no other employee tabs are affected.  
   const [summaryPeriodType, setSummaryPeriodType] = useState<PayrollPeriod["period_type"]>("monthly");
   const [summaryMonth, setSummaryMonth] = useState<string>(() => String(new Date().getMonth() + 1));
   const [summaryYear, setSummaryYear] = useState<string>(() => String(new Date().getFullYear()));
@@ -847,7 +842,14 @@ export function EmployeeProfilePage() {
     summaryStartDate,
     summaryYear,
   ]);
-  const attendanceQuery = useAttendanceRecordsQuery(
+  const loanAdvancesQuery = useLoanAdvancesQuery({
+    employeeId,
+    status: "active",
+    dateFrom: summaryRange.dateFrom,
+    dateTo: summaryRange.dateTo,
+    enabled: Boolean(employeeId),
+  });
+  const attendanceQuery = useAttendanceRecordsQuery(    
     {
       dateFrom: summaryRange.dateFrom,
       dateTo: summaryRange.dateTo,
@@ -1178,10 +1180,15 @@ export function EmployeeProfilePage() {
     const deductions = relevantComponents
       .filter((component) => component.type === "deduction")
       .reduce((sum, component) => sum + Number(component.amount || 0), 0);      
-    const advances = (loanAdvancesQuery.data ?? []).reduce(
-      (sum, loan) => sum + Number(loan.installment_amount || 0),
-      0
-    );
+    // Advances are now filtered by the selected period to prevent showing old advances in future months
+    const advances = (loanAdvancesQuery.data ?? [])
+      .filter(
+        (loan) =>
+          loan.type === "advance" &&
+          loan.start_date >= summaryRange.dateFrom &&
+          loan.start_date <= summaryRange.dateTo
+      )
+      .reduce((sum, loan) => sum + Number(loan.installment_amount || 0), 0);    
     const commissions = (commissionQuery.data ?? []).reduce(
       (sum, commission) => sum + Number(commission.amount || 0),
       0

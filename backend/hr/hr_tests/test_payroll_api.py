@@ -220,6 +220,33 @@ class PayrollApiTests(APITestCase):
         response = self.client.get(my_runs_url)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(len(response.data), 1)
+
+    def test_loan_advances_list_respects_start_date_range_filters(self):
+        self._auth(self.hr_user)
+        LoanAdvance.objects.create(
+            company=self.company,
+            employee=self.employee,
+            type=LoanAdvance.LoanType.ADVANCE,
+            principal_amount=Decimal("700.00"),
+            start_date=date(2026, 2, 15),
+            installment_amount=Decimal("175.00"),
+            remaining_amount=Decimal("350.00"),
+            status=LoanAdvance.Status.ACTIVE,
+        )
+
+        url = reverse("loan-advance-list")
+        response = self.client.get(
+            url,
+            {
+                "employee": self.employee.id,
+                "status": LoanAdvance.Status.ACTIVE,
+                "date_from": "2026-02-01",
+                "date_to": "2026-02-28",
+            },
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.data), 1)
+        self.assertEqual(response.data[0]["start_date"], "2026-02-15")        
         self.assertEqual(response.data[0]["employee"]["id"], self.employee.id)
         
     def test_generate_blocked_after_lock(self):
