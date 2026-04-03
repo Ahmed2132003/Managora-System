@@ -11,6 +11,7 @@ from django.utils.dateparse import parse_date
 from drf_spectacular.utils import extend_schema
 from rest_framework import status
 from rest_framework.response import Response
+from rest_framework.renderers import BaseRenderer, JSONRenderer
 from rest_framework.views import APIView
 
 from analytics.forecast import build_cash_forecast
@@ -30,6 +31,26 @@ SUMMARY_KEYS = {
     "lateness_rate_avg": "lateness_rate_daily",
     "cash_balance_latest": "cash_balance_daily",
 }
+
+
+
+def _cache_ttl() -> int:
+    return int(getattr(settings, "CACHE_TTL", 300))
+
+
+class CSVRenderer(BaseRenderer):
+    media_type = "text/csv"
+    format = "csv"
+    charset = "utf-8"
+
+    def render(self, data, accepted_media_type=None, renderer_context=None):
+        if data is None:
+            return b""
+        if isinstance(data, bytes):
+            return data
+        if isinstance(data, str):
+            return data.encode(self.charset)
+        return str(data).encode(self.charset)
 
 DEFAULT_KEYS_BY_CATEGORY = {
     KPIDefinition.Category.HR: {
@@ -166,7 +187,7 @@ class AnalyticsSummaryView(AnalyticsAccessMixin, APIView):
             "lateness_rate_avg": _serialize_decimal(lateness_rate_avg),
             "cash_balance_latest": _serialize_decimal(cash_balance_latest),
         }
-        safe_cache_set(cache_key, payload, timeout=settings.CACHE_TTL)        
+        safe_cache_set(cache_key, payload, timeout=_cache_ttl())        
         return Response(payload)
     
     @staticmethod
@@ -251,7 +272,7 @@ class AnalyticsKPIView(AnalyticsAccessMixin, APIView):
             )
 
         payload = [{"key": key, "points": points_by_key.get(key, [])} for key in keys]
-        safe_cache_set(cache_key, payload, timeout=settings.CACHE_TTL)        
+        safe_cache_set(cache_key, payload, timeout=_cache_ttl())        
         return Response(payload)
 
 class AnalyticsCompareView(AnalyticsAccessMixin, APIView):
@@ -301,7 +322,7 @@ class AnalyticsCompareView(AnalyticsAccessMixin, APIView):
             "delta_amount": _serialize_decimal(delta_amount),
             "delta_percent": _serialize_decimal(delta_percent),
         }
-        safe_cache_set(cache_key, payload, timeout=settings.CACHE_TTL)        
+        safe_cache_set(cache_key, payload, timeout=_cache_ttl())        
         return Response(payload)
     
     def _sum_for_period(self, kpi_key: str, start, end) -> Decimal:
@@ -409,6 +430,7 @@ class AnalyticsBreakdownView(AnalyticsAccessMixin, APIView):
 
 class AnalyticsExportView(AnalyticsAccessMixin, APIView):
     throttle_classes = [AnalyticsRateThrottle, ExportRateThrottle]
+    renderer_classes = [JSONRenderer, CSVRenderer]
     @extend_schema(
         tags=["Analytics"],
         summary="Export KPI data",
