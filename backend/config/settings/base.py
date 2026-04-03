@@ -230,7 +230,14 @@ REDIS_CACHE = {
         "health_check_interval": int(os.getenv("CACHE_HEALTH_CHECK_INTERVAL", "30")),
     },
 }
-CACHES = {"default": REDIS_CACHE}
+LOCMEM_CACHE = {
+    "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
+    "LOCATION": os.getenv("LOCMEM_CACHE_LOCATION", "managora-test-cache"),
+    "TIMEOUT": int(os.getenv("CACHE_DEFAULT_TIMEOUT", "300")),
+    "KEY_PREFIX": os.getenv("CACHE_KEY_PREFIX", "managora"),
+}
+
+CACHES = {"default": LOCMEM_CACHE if TESTING else REDIS_CACHE}
 CACHE_MIDDLEWARE_SECONDS = int(os.getenv("CACHE_MIDDLEWARE_SECONDS", "0"))
 
 # Secure file storage (Amazon S3)
@@ -258,9 +265,15 @@ CELERY_TIMEZONE = TIME_ZONE
 CELERY_TASK_TRACK_STARTED = True
 CELERY_TASK_TIME_LIMIT = int(os.getenv("CELERY_TASK_TIME_LIMIT", "1800"))
 CELERY_TASK_SOFT_TIME_LIMIT = int(os.getenv("CELERY_TASK_SOFT_TIME_LIMIT", "1500"))
-CELERY_TASK_ALWAYS_EAGER = TESTING or (os.getenv("CELERY_TASK_ALWAYS_EAGER", "0") == "1")
-CELERY_TASK_EAGER_PROPAGATES = os.getenv("CELERY_TASK_EAGER_PROPAGATES", "1") == "1"
-
+if TESTING:
+    CELERY_BROKER_URL = "memory://"
+    CELERY_RESULT_BACKEND = "cache+memory://"
+    CELERY_TASK_ALWAYS_EAGER = True
+    CELERY_TASK_EAGER_PROPAGATES = True
+else:
+    CELERY_TASK_ALWAYS_EAGER = os.getenv("CELERY_TASK_ALWAYS_EAGER", "0") == "1"
+    CELERY_TASK_EAGER_PROPAGATES = os.getenv("CELERY_TASK_EAGER_PROPAGATES", "1") == "1"
+    
 CELERY_BEAT_SCHEDULE = {
     "analytics-build-yesterday": {
         "task": "analytics.tasks.build_yesterday_kpis",
@@ -301,6 +314,16 @@ LOGGING = {
             "propagate": False,
         },
         "django.core.cache": {
+            "handlers": ["console"],
+            "level": os.getenv("CACHE_LOG_LEVEL", "WARNING"),
+            "propagate": False,
+        },
+        "hr.common.cache": {
+            "handlers": ["console"],
+            "level": os.getenv("CACHE_LOG_LEVEL", "WARNING"),
+            "propagate": False,
+        },
+        "core.services.cache_utils": {
             "handlers": ["console"],
             "level": os.getenv("CACHE_LOG_LEVEL", "WARNING"),
             "propagate": False,

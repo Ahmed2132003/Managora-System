@@ -4,7 +4,6 @@ from datetime import timedelta
 from decimal import Decimal
 
 from django.conf import settings
-from django.core.cache import cache
 from django.db.models import Avg, Sum
 from django.http import HttpResponse
 from django.utils import timezone
@@ -22,6 +21,7 @@ from core.audit import get_audit_context
 from core.models import ExportLog
 from core.permissions import HasAnyPermission, user_has_permission
 from core.throttles import ExportRateThrottle
+from core.services.cache_utils import safe_cache_get, safe_cache_set
 
 SUMMARY_KEYS = {
     "revenue_total": "revenue_daily",
@@ -131,7 +131,7 @@ class AnalyticsSummaryView(AnalyticsAccessMixin, APIView):
         allowed_keys = self._allowed_keys()
         allowed_cache_key = "all" if allowed_keys is None else ",".join(sorted(allowed_keys))
         cache_key = f"analytics:summary:{company.id}:{range_param}:{allowed_cache_key}"
-        cached = cache.get(cache_key)
+        cached = safe_cache_get(cache_key)        
         if cached:
             return Response(cached)
         base_queryset = KPIFactDaily.objects.filter(
@@ -166,7 +166,7 @@ class AnalyticsSummaryView(AnalyticsAccessMixin, APIView):
             "lateness_rate_avg": _serialize_decimal(lateness_rate_avg),
             "cash_balance_latest": _serialize_decimal(cash_balance_latest),
         }
-        cache.set(cache_key, payload, timeout=settings.CACHE_TTL)
+        safe_cache_set(cache_key, payload, timeout=settings.CACHE_TTL)        
         return Response(payload)
     
     @staticmethod
@@ -233,7 +233,7 @@ class AnalyticsKPIView(AnalyticsAccessMixin, APIView):
             f"analytics:kpi:{request.user.company_id}:{','.join(keys)}:"
             f"{start_date.isoformat()}:{end_date.isoformat()}"
         )
-        cached = cache.get(cache_key)
+        cached = safe_cache_get(cache_key)        
         if cached:
             return Response(cached)
 
@@ -251,7 +251,7 @@ class AnalyticsKPIView(AnalyticsAccessMixin, APIView):
             )
 
         payload = [{"key": key, "points": points_by_key.get(key, [])} for key in keys]
-        cache.set(cache_key, payload, timeout=settings.CACHE_TTL)
+        safe_cache_set(cache_key, payload, timeout=settings.CACHE_TTL)        
         return Response(payload)
 
 class AnalyticsCompareView(AnalyticsAccessMixin, APIView):
@@ -278,7 +278,7 @@ class AnalyticsCompareView(AnalyticsAccessMixin, APIView):
             )
 
         cache_key = f"analytics:compare:{request.user.company_id}:{kpi_key}:{period}"
-        cached = cache.get(cache_key)
+        cached = safe_cache_get(cache_key)        
         if cached:
             return Response(cached)
 
@@ -301,7 +301,7 @@ class AnalyticsCompareView(AnalyticsAccessMixin, APIView):
             "delta_amount": _serialize_decimal(delta_amount),
             "delta_percent": _serialize_decimal(delta_percent),
         }
-        cache.set(cache_key, payload, timeout=settings.CACHE_TTL)
+        safe_cache_set(cache_key, payload, timeout=settings.CACHE_TTL)        
         return Response(payload)
     
     def _sum_for_period(self, kpi_key: str, start, end) -> Decimal:

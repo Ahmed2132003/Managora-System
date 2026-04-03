@@ -36,21 +36,30 @@ def sync_hr_action_deduction_on_delete(
 @receiver(post_save, sender=Department)
 @receiver(post_delete, sender=Department)
 def invalidate_department_cache(sender, instance: Department, **kwargs) -> None:
-    invalidate_cache([build_cache_key(resource="departments", company_id=instance.company_id)])
-
+    try:
+        invalidate_cache([build_cache_key(resource="departments", company_id=instance.company_id)])
+    except Exception:
+        logger.exception("invalidate_department_cache failed", extra={"company_id": instance.company_id})
+        
 
 @receiver(post_save, sender=JobTitle)
 @receiver(post_delete, sender=JobTitle)
 def invalidate_job_title_cache(sender, instance: JobTitle, **kwargs) -> None:
-    invalidate_cache([build_cache_key(resource="job_titles", company_id=instance.company_id)])
-
+    try:
+        invalidate_cache([build_cache_key(resource="job_titles", company_id=instance.company_id)])
+    except Exception:
+        logger.exception("invalidate_job_title_cache failed", extra={"company_id": instance.company_id})
+        
 
 @receiver(post_save, sender=LeaveType)
 @receiver(post_delete, sender=LeaveType)
 def invalidate_leave_type_cache(sender, instance: LeaveType, **kwargs) -> None:
-    invalidate_cache(
-        [
-            build_cache_key(resource="leave_types", company_id=instance.company_id, suffix="active"),
-            build_cache_key(resource="leave_types", company_id=instance.company_id, suffix="all"),
-        ]
-    )
+    try:
+        invalidate_cache(
+            [
+                build_cache_key(resource="leave_types", company_id=instance.company_id, suffix="active"),
+                build_cache_key(resource="leave_types", company_id=instance.company_id, suffix="all"),
+            ]
+        )
+    except Exception:
+        logger.exception("invalidate_leave_type_cache failed", extra={"company_id": instance.company_id})
