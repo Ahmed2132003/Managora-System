@@ -7,6 +7,7 @@ import logging
 from celery import shared_task
 from django.contrib.auth import get_user_model
 from django.db import transaction
+from rest_framework.exceptions import ValidationError
 
 from core.services.notifications import NotificationMessage, notify_user
 from hr.models import PayrollPeriod, PayrollTaskRun
@@ -43,11 +44,21 @@ def generate_payroll_period(self, period_id: int, user_id: int) -> dict:
             ),
         )
         return summary
+    except ValidationError as exc:
+        logger.warning(
+            "Payroll generation validation failed",
+            extra={"period_id": period_id, "user_id": user_id, "task_id": self.request.id},
+        )
+        PayrollTaskRun.objects.filter(task_id=self.request.id).update(
+            status=PayrollTaskRun.Status.FAILED,
+            error=str(exc),
+        )
+        return {"detail": str(exc)}
     except Exception as exc:
         logger.exception(
             "Payroll generation task failed",
             extra={"period_id": period_id, "user_id": user_id, "task_id": self.request.id},
-        )
+        )        
         PayrollTaskRun.objects.filter(task_id=self.request.id).update(
             status=PayrollTaskRun.Status.FAILED,
             error=str(exc),

@@ -1813,10 +1813,13 @@ class PayrollPeriodGenerateView(APIView):
 
     def post(self, request, id=None):
         period = get_object_or_404(PayrollPeriod, id=id, company=request.user.company)
+        if period.status == PayrollPeriod.Status.LOCKED:
+            raise ValidationError({"detail": "Payroll period is locked."})
+
         async_result = generate_payroll_period.delay(
             period_id=period.id,
             user_id=request.user.id,
-        )
+        )        
         PayrollTaskRun.objects.create(
             task_id=async_result.id,
             period=period,
