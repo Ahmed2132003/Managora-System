@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { notifications } from "@mantine/notifications";
-import { useQueries } from "@tanstack/react-query";
 
 import { DashboardShell } from "../../DashboardShell";
 import {
@@ -10,6 +9,7 @@ import {
   useMyPayrollRuns,
   type AttendanceRecord,
   type PayrollRunDetail,
+  usePayrollRun,
   useAttendanceRecordsQuery,
   useUploadMyEmployeeDocument,
   type DocumentCategory,
@@ -142,18 +142,7 @@ export function EmployeeSelfServicePage() {
   const [hrName, setHrName] = useState("-");
   const runsQuery = useMyPayrollRuns();
   const meQuery = useMe();
-  const runDetailsQueries = useQueries({
-    queries: (runsQuery.data ?? []).map((run) => ({
-      queryKey: ["payroll", "runs", run.id, "self-service"],
-      queryFn: async () => {
-        const response = await http.get<PayrollRunDetail>(
-          endpoints.hr.payrollRun(run.id),
-        );
-        return response.data;
-      },
-      enabled: runsQuery.isSuccess,
-    })),
-  });
+  const runDetailsQuery = usePayrollRun(expandedRunId);  
   const docsQuery = useMyEmployeeDocuments();
   const uploadMutation = useUploadMyEmployeeDocument();
   const deleteMutation = useDeleteEmployeeDocument();
@@ -164,13 +153,8 @@ export function EmployeeSelfServicePage() {
   const [file, setFile] = useState<File | null>(null);
 
   const expandedRunDetails = useMemo(
-    () =>
-      expandedRunId != null
-        ? runDetailsQueries
-            .map((query) => query.data)
-            .find((run): run is PayrollRunDetail => run?.id === expandedRunId) ?? null
-        : null,
-    [expandedRunId, runDetailsQueries],
+    () => runDetailsQuery.data ?? null,
+    [runDetailsQuery.data],
   );
 
   const expandedRunRange = useMemo(() => {
@@ -356,74 +340,19 @@ export function EmployeeSelfServicePage() {
   const managerName = roleNames.includes("manager") || isSuperUser ? currentUserName : "-";
 
   useEffect(() => {
-    const runs = runsQuery.data ?? [];
-    const missingRuns = runs.filter((run) => runPayables[run.id] == null);
-    if (missingRuns.length === 0) return;
-
-    let cancelled = false;
-    async function loadPayables() {
-      const results = await Promise.all(
-        missingRuns.map(async (run) => {
-          try {
-            const details = runDetailsQueries
-              .map((query) => query.data)
-              .find((item): item is PayrollRunDetail => item?.id === run.id);
-            if (!details) {
-              return null;
-            }
-            if (!details.period?.start_date || !details.period?.end_date) {
-              return { id: run.id, payable: parseAmount(details.net_total ?? run.net_total) };
-            }
-            const attendanceResponse = await http.get<AttendanceRecord[]>(
-              endpoints.hr.attendanceRecords,
-              {                
-                params: {
-                  date_from: details.period.start_date,
-                  date_to: details.period.end_date,
-                  employee_id: run.employee.id,
-                },
-              },
-            );
-            const start = new Date(details.period.start_date);
-            const end = new Date(details.period.end_date);
-            const periodRange = {
-              dateFrom: details.period.start_date,
-              dateTo: details.period.end_date,
-              days: Math.max(
-                Math.floor((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1,
-                1,
-              ),
-            };
-            const summary = buildRunSummary(details, attendanceResponse.data ?? [], periodRange);
-            const calculated = calculatePayableTotal(summary);
-            return {
-              id: run.id,
-              payable: calculated ?? parseAmount(details.net_total ?? run.net_total),
-            };
-          } catch {
-            return { id: run.id, payable: parseAmount(run.net_total) };
-          }
-        }),
-      );
-
-      if (cancelled) return;
-      setRunPayables((prev) => {
-        const next = { ...prev };
-        results.forEach((result) => {
-          if (!result) {
-            return;
-          }
-          next[result.id] = result.payable;
-        });
-        return next;
-      });      
+    if (expandedRunId == null || expandedRunPayable == null) {
+      return;
     }
-
-    loadPayables();
-    return () => {
-      cancelled = true;
-    };
-  }, [runDetailsQueries, runPayables, runsQuery.data]);
+    setRunPayables((prev) => {
+      if (prev[expandedRunId] === expandedRunPayable) {
+        return prev;
+      }
+      return {
+        ...prev,
+        [expandedRunId]: expandedRunPayable,
+      };
+    });
+  }, [expandedRunId, expandedRunPayable]);
 
   useEffect(() => {
     let cancelled = false;
@@ -499,14 +428,7 @@ export function EmployeeSelfServicePage() {
     >
       {({ language, isArabic }) => {
         const copy = pageCopy[language];
-        const runDetailsById = new Map(
-          runDetailsQueries
-            .map((query) => query.data)
-            .filter((run): run is PayrollRunDetail => Boolean(run))
-            .map((run) => [run.id, run]),
-        );
-
-        return (
+        return (          
           <div
             className="employee-self-service__content"
             dir={isArabic ? "rtl" : "ltr"}
@@ -540,7 +462,7 @@ export function EmployeeSelfServicePage() {
                         {copy.actions.viewPayslip}
                       </button>
                     </div>
-                    {expandedRunId === run.id && runDetailsById.get(run.id) && (
+                    {expandedRunId === run.id && expandedRunDetails && (                      
                       <div className="employee-self-service__payslip-preview">
                         <div className="payroll-period-details__detail-summary">
                           <div>
@@ -549,13 +471,12 @@ export function EmployeeSelfServicePage() {
                             </span>
                             <strong>
                               {formatMoney(
-                                runDetailsById
-                                  .get(run.id)
+                                expandedRunDetails
                                   ?.lines.find((line) => line.code.toUpperCase() === "BASIC")
                                   ?.amount ?? run.earnings_total,
                               )}
                             </strong>
-                          </div>
+                          </div>                          
                           <div>
                             <span className="helper-text">{copy.labels.net}</span>
                             <strong>{formatMoney(expandedRunPayable)}</strong>
@@ -621,7 +542,7 @@ export function EmployeeSelfServicePage() {
                               </tr>
                             </thead>
                             <tbody>
-                              {runDetailsById.get(run.id)?.lines.map((line) => (
+                              {expandedRunDetails.lines.map((line) => (                                
                                 <tr key={line.id}>
                                   <td>{line.name}</td>
                                   <td>{line.type}</td>

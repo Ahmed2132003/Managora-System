@@ -438,7 +438,10 @@ export function useAttendanceRecordsQuery(
   return useQuery({
     queryKey: ["attendance", "records", filters],
     enabled,
-    queryFn: async () => {
+    staleTime: 2 * 60 * 1000,
+    gcTime: 10 * 60 * 1000,
+    refetchOnWindowFocus: false,
+    queryFn: async () => {      
       const response = await http.get<AttendanceRecord[]>(
         endpoints.hr.attendanceRecords,
         {
@@ -1411,7 +1414,10 @@ export function usePeriodRuns(periodId: number | null) {
 export function usePayrollRun(runId: number | null) {
   return useQuery({
     queryKey: ["payroll", "runs", runId],
-    queryFn: async () => {
+    staleTime: 5 * 60 * 1000,
+    gcTime: 20 * 60 * 1000,
+    refetchOnWindowFocus: false,
+    queryFn: async () => {      
       if (!runId) {
         throw new Error("Run ID is required");
       }
@@ -1424,10 +1430,14 @@ export function usePayrollRun(runId: number | null) {
   });
 }
 
+
 export function useMyPayrollRuns() {
   return useQuery({
     queryKey: ["payroll", "runs", "my"],
-    queryFn: async () => {
+    staleTime: 5 * 60 * 1000,
+    gcTime: 20 * 60 * 1000,
+    refetchOnWindowFocus: false,
+    queryFn: async () => {      
       const response = await http.get<PayrollRun[]>(endpoints.hr.payrollRunsMy);
       return response.data;
     },

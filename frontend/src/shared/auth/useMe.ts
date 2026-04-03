@@ -33,7 +33,10 @@ export type MeResponse = {
 export function useMe() {
   return useQuery({
     queryKey: ["me"],
-    queryFn: async () => {
+    staleTime: 5 * 60 * 1000,
+    gcTime: 15 * 60 * 1000,
+    refetchOnWindowFocus: false,
+    queryFn: async () => {      
       const endpoint = endpoints.me;
       console.info("[auth][me] fetch:start", {
         endpoint,

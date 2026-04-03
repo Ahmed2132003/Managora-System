@@ -13,7 +13,7 @@ from rest_framework.response import Response
 from core.api_views.base import ThrottledInitialMixin
 from core.permissions import PermissionByActionMixin
 from core.tenancy import CompanyScopedViewSet
-from core.throttles import AttendanceThrottle
+from core.throttles import AttendanceReadWriteThrottle
 from hr.models import AttendanceRecord
 from hr.attendance.serializers import (
     AttendanceActionSerializer,
@@ -59,7 +59,8 @@ def _parse_date_param(value, label):
 class AttendanceViewSet(ThrottledInitialMixin, PermissionByActionMixin, CompanyScopedViewSet):        
     serializer_class = AttendanceRecordSerializer
     permission_classes = [IsAuthenticated]
-    throttle_classes = [AttendanceThrottle]    
+    # Use higher read capacity for dashboard/profile queries while preserving write protection.
+    throttle_classes = [AttendanceReadWriteThrottle]     
     permission_map = {
         "list": "attendance.*",
         "retrieve": "attendance.*",

@@ -31,7 +31,12 @@ from core.permissions import (
     PermissionByActionMixin,
     user_has_permission,
 )
-from core.throttles import AttendanceThrottle, UploadThrottle
+from core.throttles import (
+    AttendanceReadWriteThrottle,
+    AttendanceThrottle,
+    PayslipReadWriteThrottle,
+    UploadThrottle,
+)
 from core.viewsets import CompanyScopedViewSet
 from hr.models import (
     AttendanceRecord,
@@ -1161,7 +1166,8 @@ class AttendanceApproveRejectView(APIView):
 class AttendanceRecordViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class = AttendanceRecordSerializer
     permission_classes = [IsAuthenticated]
-
+    throttle_classes = [AttendanceReadWriteThrottle]
+    
     def get_permissions(self):
         permissions = [permission() for permission in self.permission_classes]
         permissions.append(HasAnyPermission(["attendance.*"]))
@@ -1866,7 +1872,8 @@ class PayrollPeriodRunsListView(ListAPIView):
 class PayrollRunMyListView(ListAPIView):
     permission_classes = [IsAuthenticated]
     serializer_class = PayrollRunListSerializer
-
+    throttle_classes = [PayslipReadWriteThrottle]
+    
     def get_queryset(self):
         employee = getattr(self.request.user, "employee_profile", None)
         if not employee or employee.company_id != self.request.user.company_id:
@@ -1885,7 +1892,8 @@ class PayrollRunMyListView(ListAPIView):
 )
 class PayrollRunDetailView(APIView):
     permission_classes = [IsAuthenticated]
-
+    throttle_classes = [PayslipReadWriteThrottle]
+    
     def get(self, request, id=None):
         payroll_run = get_object_or_404(PayrollRun, id=id, company=request.user.company)
         has_permission = _user_has_payroll_permission(
@@ -1911,6 +1919,7 @@ class PayrollRunDetailView(APIView):
 class PayrollRunViewSet(mixins.RetrieveModelMixin, viewsets.GenericViewSet):
     permission_classes = [IsAuthenticated]
     serializer_class = PayrollRunDetailSerializer
+    throttle_classes = [PayslipReadWriteThrottle]    
     lookup_field = "id"
     lookup_url_kwarg = "id"
     lookup_value_regex = "\\d+"

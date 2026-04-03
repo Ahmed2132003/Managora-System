@@ -6,11 +6,12 @@ from rest_framework import status
 
 from core.permissions import user_permission_codes
 from core.serializers.me import MeSerializer
-
+from core.throttles import ProfileReadWriteThrottle
 
 class MeView(APIView):
     permission_classes = [IsAuthenticated]
-
+    throttle_classes = [ProfileReadWriteThrottle]
+    
     @extend_schema(
         tags=["Auth"],
         summary="Current user profile",

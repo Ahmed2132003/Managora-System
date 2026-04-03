@@ -46,8 +46,11 @@ class ThrottlingToggleMixin:
         if getattr(settings, "DISABLE_THROTTLING", False) and not getattr(settings, "TESTING", False):
             return True
         try:
-            return super().allow_request(request, view)
-        except (RedisConnectionError, RedisTimeoutError, RedisError, ConnectionError, OSError) as exc:
+            allowed = super().allow_request(request, view)
+            if not allowed:
+                self._log_throttled_request(request, view)
+            return allowed
+        except (RedisConnectionError, RedisTimeoutError, RedisError, ConnectionError, OSError) as exc:            
             # Never fail auth/critical endpoints due to a temporary cache outage.
             if self._is_auth_endpoint(request):
                 logger.warning(
@@ -65,14 +68,32 @@ class ThrottlingToggleMixin:
                 self.__class__.__name__,
             )
             try:
-                return super().allow_request(request, view)
-            except Exception as fallback_exc:
+                allowed = super().allow_request(request, view)
+                if not allowed:
+                    self._log_throttled_request(request, view)
+                return allowed
+            except Exception as fallback_exc:                
                 logger.warning(
                     "Throttle fallback cache failed (%s). Allowing request to keep endpoint available.",
                     fallback_exc,
                 )
                 return True
 
+    def _log_throttled_request(self, request, view):
+        user_id = getattr(getattr(request, "user", None), "id", None)
+        scope = getattr(self, "scope", None) or getattr(view, "throttle_scope", None) or "unknown"
+        logger.info(
+            "Request throttled",
+            extra={
+                "throttle_class": self.__class__.__name__,
+                "scope": scope,
+                "method": getattr(request, "method", ""),
+                "path": getattr(request, "path", ""),
+                "user_id": user_id,
+                "wait_seconds": self.wait(),
+            },
+        )
+        
 
 class ReadWriteUserRateThrottle(ThrottlingToggleMixin, UserRateThrottle):    
     """
@@ -158,7 +179,62 @@ class AttendanceThrottle(ThrottlingToggleMixin, _DefaultRateMixin, UserRateThrot
         return f"throttle_{self.scope}_{ident}"
 
 
-class UploadThrottle(ThrottlingToggleMixin, _DefaultRateMixin, UserRateThrottle):
+class _EndpointReadWriteThrottle(ThrottlingToggleMixin, _DefaultRateMixin, UserRateThrottle):
+    """
+    Per-endpoint throttle that keeps writes protected while allowing higher read throughput.
+    """
+
+    read_scope = None
+    write_scope = None
+
+    def get_rate(self):
+        rates = api_settings.DEFAULT_THROTTLE_RATES
+        if not isinstance(rates, dict):
+            return self.default_rate
+
+        method = getattr(getattr(self, "request", None), "method", "").upper()
+        if method in ("GET", "HEAD"):
+            if self.read_scope:
+                return rates.get(self.read_scope) or rates.get(self.scope) or self.default_rate
+        else:
+            if self.write_scope:
+                return rates.get(self.write_scope) or rates.get(self.scope) or self.default_rate
+        return rates.get(self.scope) or self.default_rate
+
+    def allow_request(self, request, view):
+        self.request = request
+        return super().allow_request(request, view)
+
+    def get_cache_key(self, request, view):
+        if request.user and request.user.is_authenticated:
+            ident = request.user.pk
+        else:
+            ident = self.get_ident(request)
+        return f"throttle_{self.scope}_{ident}"
+
+
+class AttendanceReadWriteThrottle(_EndpointReadWriteThrottle):
+    scope = "attendance"
+    read_scope = "attendance_read"
+    write_scope = "attendance_write"
+    default_rate = "120/min"
+
+
+class PayslipReadWriteThrottle(_EndpointReadWriteThrottle):
+    scope = "payslip"
+    read_scope = "payslip_read"
+    write_scope = "payslip_write"
+    default_rate = "120/min"
+
+
+class ProfileReadWriteThrottle(_EndpointReadWriteThrottle):
+    scope = "profile"
+    read_scope = "profile_read"
+    write_scope = "profile_write"
+    default_rate = "120/min"
+
+
+class UploadThrottle(ThrottlingToggleMixin, _DefaultRateMixin, UserRateThrottle):    
     scope = "upload"
     default_rate = "3/min"
 

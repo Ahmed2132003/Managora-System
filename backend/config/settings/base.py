@@ -155,8 +155,16 @@ REST_FRAMEWORK = {
         "user_write": "90/min",
         "analytics": "120/min",
         "login": "5/min",
-        "otp": "5/min",        
+        # Attendance write endpoints (check-in/out) stay strict.
         "attendance": "10/min",
+        # Dashboard/profile attendance reads can legitimately burst when opening profile pages.
+        "attendance_read": "180/min",
+        "attendance_write": "30/min",
+        # Payslip/profile reads used in self-service and profile pages.
+        "payslip_read": "180/min",
+        "payslip_write": "60/min",
+        "profile_read": "180/min",
+        "profile_write": "60/min",
         "upload": "3/min",        
         "copilot": "30/min",
         "export": "30/min",
@@ -173,12 +181,19 @@ if TESTING:
         "analytics": "10000/min",
         "login": "10000/min",                    
         "otp": "10000/min",
+        "otp": "10000/min",
         "attendance": "10000/min",
+        "attendance_read": "10000/min",
+        "attendance_write": "10000/min",
+        "payslip_read": "10000/min",
+        "payslip_write": "10000/min",
+        "profile_read": "10000/min",
+        "profile_write": "10000/min",
         "upload": "10000/min",
         "copilot": "10000/min",
         "export": "10000/min",
     }
-        
+            
 SIMPLE_JWT = {
     "ACCESS_TOKEN_LIFETIME": timedelta(minutes=15),
     "REFRESH_TOKEN_LIFETIME": timedelta(days=7),

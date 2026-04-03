@@ -64,6 +64,7 @@ function setTokensCompat(access: string, refresh: string) {
 type RetriableConfig = InternalAxiosRequestConfig & {
   _retry?: boolean;
   _networkNotified?: boolean;
+  _rateLimitRetryCount?: number;
 };
 
 type QueueItem = {
@@ -76,6 +77,8 @@ let refreshPromise: Promise<string | null> | null = null;
 let isRefreshing = false;
 const requestQueue: QueueItem[] = [];
 let lastRefreshAt: string | null = null;
+const rateLimitNoticeByPath = new Map<string, number>();
+const RATE_LIMIT_NOTICE_COOLDOWN_MS = 3000;
 
 function processQueue(error: unknown, newAccess: string | null) {
   while (requestQueue.length) {
@@ -90,6 +93,17 @@ function processQueue(error: unknown, newAccess: string | null) {
     }
     item.resolve(http(item.config));
   }
+}
+
+function parseRetryAfterMilliseconds(value: unknown): number | null {
+  if (typeof value !== "string") return null;
+  const asSeconds = Number(value);
+  if (!Number.isNaN(asSeconds) && asSeconds >= 0) {
+    return asSeconds * 1000;
+  }
+  const target = Date.parse(value);
+  if (Number.isNaN(target)) return null;
+  return Math.max(target - Date.now(), 0);
 }
 
 /**
@@ -203,8 +217,33 @@ http.interceptors.response.use(
     }
 
     const requestPath = String(originalRequest.url ?? "");
+    const method = String(originalRequest.method ?? "get").toLowerCase();
 
-    // Don’t try to refresh if this request IS the refresh call itself
+    if (status === 429) {
+      const now = Date.now();
+      const lastNoticeAt = rateLimitNoticeByPath.get(requestPath) ?? 0;
+      if (now - lastNoticeAt > RATE_LIMIT_NOTICE_COOLDOWN_MS) {
+        notifications.show({
+          title: "High request load",
+          message: "الخادم مشغول حاليًا، سنُعيد المحاولة تلقائيًا خلال لحظات.",
+          color: "yellow",
+        });
+        rateLimitNoticeByPath.set(requestPath, now);
+      }
+
+      // Retry GET requests with small backoff to absorb temporary burst throttling.
+      const retryCount = originalRequest._rateLimitRetryCount ?? 0;
+      if (method === "get" && retryCount < 2) {
+        originalRequest._rateLimitRetryCount = retryCount + 1;
+        const retryAfterMs =
+          parseRetryAfterMilliseconds(error.response?.headers?.["retry-after"]) ??
+          400 * 2 ** retryCount;
+        await new Promise((resolve) => window.setTimeout(resolve, retryAfterMs));
+        return http(originalRequest);
+      }
+    }
+
+    // Don’t try to refresh if this request IS the refresh call itself    
     const isRefreshCall =
       requestPath.includes(String(endpoints?.auth?.refresh ?? "")) ||
       requestPath.includes("/api/auth/refresh") ||
