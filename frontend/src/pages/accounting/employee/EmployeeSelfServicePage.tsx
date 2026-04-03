@@ -15,6 +15,11 @@ import {
 import { http } from "../../../shared/api/http";
 import { endpoints } from "../../../shared/api/endpoints";
 import { useMe } from "../../../shared/auth/useMe";
+import {
+  buildRunSummary,
+  calculatePayableTotal,
+  getPeriodRange,
+} from "../../../modules/hr/payroll/period-details/services/payrollPeriodDetails.utils";
 import "./EmployeeSelfServicePage.css";
 
 type Language = "en" | "ar";
@@ -136,10 +141,12 @@ const pageCopy: Copy = {
 
 export function EmployeeSelfServicePage() {
   const [expandedRunId, setExpandedRunId] = useState<number | null>(null);
-  const [hrName, setHrName] = useState("-");  
+  const [hrName, setHrName] = useState("-");
+  const [runPayables, setRunPayables] = useState<Record<number, number>>({});
+  const [runPayableLoadErrors, setRunPayableLoadErrors] = useState<Record<number, boolean>>({});
   const runsQuery = useMyPayrollRuns();
   const meQuery = useMe();
-  const runDetailsQuery = usePayrollRun(expandedRunId);  
+  const runDetailsQuery = usePayrollRun(expandedRunId);
   const docsQuery = useMyEmployeeDocuments();
   const uploadMutation = useUploadMyEmployeeDocument();
   const deleteMutation = useDeleteEmployeeDocument();
@@ -154,20 +161,10 @@ export function EmployeeSelfServicePage() {
     [runDetailsQuery.data],
   );
 
-  const expandedRunRange = useMemo(() => {
-    const dateFrom = expandedRunDetails?.period?.start_date;
-    const dateTo = expandedRunDetails?.period?.end_date;
-    if (!dateFrom || !dateTo) {
-      return null;
-    }
-    const start = new Date(dateFrom);
-    const end = new Date(dateTo);
-    const days = Math.max(
-      Math.floor((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1,
-      1,
-    );
-    return { dateFrom, dateTo, days };
-  }, [expandedRunDetails]);
+  const expandedRunRange = useMemo(
+    () => getPeriodRange(expandedRunDetails?.period),
+    [expandedRunDetails?.period],
+  );
 
   const attendanceQuery = useAttendanceRecordsQuery(
     {
@@ -233,80 +230,104 @@ export function EmployeeSelfServicePage() {
     return parseAmount(value).toFixed(2);
   }
 
-  function resolveDailyRateByPeriod(
-    periodType: "monthly" | "weekly" | "daily" | undefined,
-    basicSalary: number,
-  ) {
-    if (!basicSalary) return null;
-    if (periodType === "daily") return basicSalary;
-    if (periodType === "weekly") return basicSalary / 7;
-    return basicSalary / 30;
-  }
-
   const expandedRunSummary = useMemo(() => {
-    if (!expandedRunDetails || !expandedRunRange) {
-      return null;
-    }
-
-    const records = attendanceQuery.data ?? [];
-    const presentDays = records.filter((record) => record.status !== "absent").length;
-    const absentDays = Math.max(expandedRunRange.days - presentDays, 0);
-    const lateMinutes = records.reduce(
-      (sum, record) => sum + (record.late_minutes ?? 0),
-      0,
+    return buildRunSummary(
+      expandedRunDetails,
+      attendanceQuery.data ?? [],
+      expandedRunRange,
     );
-    const lines = expandedRunDetails.lines ?? [];
-    const basicLine = lines.find((line) => line.code.toUpperCase() === "BASIC");
-    const basicAmount = basicLine ? parseAmount(basicLine.amount) : 0;
-    const metaRate = basicLine?.meta?.rate;
-    const dailyRate = metaRate
-      ? parseAmount(metaRate)
-      : resolveDailyRateByPeriod(expandedRunDetails.period.period_type, basicAmount);
-
-    const bonuses = lines
-      .filter(
-        (line) =>
-          line.type === "earning" &&
-          line.code.toUpperCase() !== "BASIC" &&
-          !line.code.toUpperCase().startsWith("COMM-"),
-      )
-      .reduce((sum, line) => sum + parseAmount(line.amount), 0);
-    const commissions = lines
-      .filter((line) => line.type === "earning" && line.code.toUpperCase().startsWith("COMM-"))
-      .reduce((sum, line) => sum + parseAmount(line.amount), 0);
-    const deductions = lines
-      .filter(
-        (line) => line.type === "deduction" && !line.code.toUpperCase().startsWith("LOAN-"),
-      )
-      .reduce((sum, line) => sum + parseAmount(line.amount), 0);
-    const advances = lines
-      .filter((line) => line.type === "deduction" && line.code.toUpperCase().startsWith("LOAN-"))
-      .reduce((sum, line) => sum + parseAmount(line.amount), 0);
-
-    return {
-      presentDays,
-      absentDays,
-      lateMinutes,
-      bonuses,
-      commissions,
-      deductions,
-      advances,
-      dailyRate: dailyRate ?? 0,
-    };
   }, [attendanceQuery.data, expandedRunDetails, expandedRunRange]);
 
   const expandedRunPayable = useMemo(() => {
-    if (!expandedRunSummary) {
-      return parseAmount(expandedRunDetails?.net_total ?? 0);
+    if (expandedRunId != null && runPayables[expandedRunId] != null) {
+      return runPayables[expandedRunId];
     }
     return (
-      expandedRunSummary.presentDays * expandedRunSummary.dailyRate +
-      expandedRunSummary.bonuses +
-      expandedRunSummary.commissions -
-      expandedRunSummary.deductions -
-      expandedRunSummary.advances
+      calculatePayableTotal(expandedRunSummary) ??
+      parseAmount(expandedRunDetails?.net_total ?? 0)
     );
-  }, [expandedRunDetails?.net_total, expandedRunSummary]);
+  }, [expandedRunDetails?.net_total, expandedRunId, expandedRunSummary, runPayables]);
+
+  useEffect(() => {
+    if (!runsQuery.data?.length) {
+      return;
+    }
+
+    const missingRuns = runsQuery.data.filter((run) => runPayables[run.id] == null);
+    if (missingRuns.length === 0) {
+      return;
+    }
+
+    let cancelled = false;
+    async function loadRunPayables() {
+      const results = await Promise.all(
+        missingRuns.map(async (run) => {
+          try {
+            const runDetailsResponse = await http.get(endpoints.hr.payrollRun(run.id));
+            const runDetails = runDetailsResponse.data;
+            const periodRange = getPeriodRange(runDetails?.period);
+            if (!periodRange || !runDetails?.employee?.id) {
+              return {
+                id: run.id,
+                payable: parseAmount(runDetails?.net_total ?? run.net_total),
+                hasError: false,
+              };
+            }
+
+            const attendanceResponse = await http.get(endpoints.hr.attendanceRecords, {
+              params: {
+                date_from: periodRange.dateFrom,
+                date_to: periodRange.dateTo,
+                employee_id: runDetails.employee.id,
+              },
+            });
+            const summary = buildRunSummary(
+              runDetails,
+              attendanceResponse.data ?? [],
+              periodRange,
+            );
+
+            return {
+              id: run.id,
+              payable:
+                calculatePayableTotal(summary) ??
+                parseAmount(runDetails?.net_total ?? run.net_total),
+              hasError: false,
+            };
+          } catch {
+            return { id: run.id, payable: parseAmount(run.net_total), hasError: true };
+          }
+        }),
+      );
+
+      if (cancelled) {
+        return;
+      }
+
+      setRunPayables((prev) => {
+        const next = { ...prev };
+        results.forEach((result) => {
+          next[result.id] = result.payable;
+        });
+        return next;
+      });
+
+      setRunPayableLoadErrors((prev) => {
+        const next = { ...prev };
+        results.forEach((result) => {
+          if (result.hasError) {
+            next[result.id] = true;
+          }
+        });
+        return next;
+      });
+    }
+
+    loadRunPayables();
+    return () => {
+      cancelled = true;
+    };
+  }, [runPayables, runsQuery.data]);
 
   const currentUserName = useMemo(() => {
     const user = meQuery.data?.user;
@@ -369,12 +390,17 @@ export function EmployeeSelfServicePage() {
     fallback: string,
     expandedPayable: number | null,
   ) {
-    // Keep Profile "Total Due" aligned with the exact payable source used by the payslip preview:
-    // 1) expanded payslip computed payable, 2) payroll-run net_total fallback from API/list payload.    
+    // Using the same source of truth as PayslipModal to ensure consistency.
+    if (runPayables[runId] != null) {
+      return runPayables[runId];
+    }
     if (expandedRunId === runId && expandedPayable != null) {
       return expandedPayable;
-    }    
-    return parseAmount(fallback);
+    }
+    if (runPayableLoadErrors[runId]) {
+      return parseAmount(fallback);
+    }
+    return null;
   }
   
   return (
@@ -412,10 +438,18 @@ export function EmployeeSelfServicePage() {
                     </p>
                     <p>
                       <strong>{copy.labels.net}:</strong>{" "}
-                      {formatMoney(
-                        getRunNetTotal(run.id, run.net_total, expandedRunPayable),
-                      )}
-                    </p>                    
+                      {(() => {
+                        const runNetTotal = getRunNetTotal(
+                          run.id,
+                          run.net_total,
+                          expandedRunPayable,
+                        );
+                        if (runNetTotal == null) {
+                          return language === "ar" ? "جاري التحميل..." : "Loading...";
+                        }
+                        return formatMoney(runNetTotal);
+                      })()}
+                    </p>
                     <div className="employee-self-service__actions">
                       <button
                         type="button"
