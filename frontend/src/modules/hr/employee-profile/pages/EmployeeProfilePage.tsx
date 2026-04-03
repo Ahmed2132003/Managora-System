@@ -35,6 +35,7 @@ import {
   type DocumentCategory,
   type EmployeeStatus,
   type LinkedEntityType,
+  type PayrollPeriod,
   type SalaryType,
 } from "../../../../shared/hr/hooks.ts";
 import { AccessDenied } from "../../../../shared/ui/AccessDenied.tsx";
@@ -67,7 +68,14 @@ type PageContent = {
   payrollSummary: {
     title: string;
     subtitle: string;
-    presentDays: string;
+    periodType: string;
+    month: string;
+    year: string;
+    startDate: string;
+    endDate: string;
+    activeRange: string;
+    loading: string;
+    presentDays: string;    
     absentDays: string;
     lateMinutes: string;
     deductions: string;
@@ -190,7 +198,14 @@ const pageCopy: Record<Language, PageContent> = {
     payrollSummary: {
       title: "Attendance & payroll summary",
       subtitle: "Track attendance, delays, and the estimated payable salary.",
-      presentDays: "Attendance days",
+      periodType: "Period type",
+      month: "Month",
+      year: "Year",
+      startDate: "Start date",
+      endDate: "End date",
+      activeRange: "Active range",
+      loading: "Refreshing summary...",
+      presentDays: "Attendance days",      
       absentDays: "Absence days",
       lateMinutes: "Late minutes",
       deductions: "Deductions",
@@ -311,7 +326,14 @@ const pageCopy: Record<Language, PageContent> = {
     payrollSummary: {
       title: "ملخص الحضور والراتب",
       subtitle: "متابعة الحضور والتأخير وصافي الراتب المستحق.",
-      presentDays: "أيام الحضور",
+      periodType: "نوع الفترة",
+      month: "الشهر",
+      year: "السنة",
+      startDate: "تاريخ البداية",
+      endDate: "تاريخ النهاية",
+      activeRange: "الفترة الحالية",
+      loading: "جاري تحديث الملخص...",
+      presentDays: "أيام الحضور",      
       absentDays: "أيام الغياب",
       lateMinutes: "دقائق التأخير",
       deductions: "الخصومات",
@@ -598,6 +620,60 @@ function resolvePeriodTypeFromSalary(type: SalaryType): "monthly" | "weekly" | "
   return "monthly";
 }
 
+const periodTypeOptionsByLanguage: Record<
+  Language,
+  { value: PayrollPeriod["period_type"]; label: string }[]
+> = {
+  en: [
+    { value: "monthly", label: "Monthly" },
+    { value: "weekly", label: "Weekly" },
+    { value: "daily", label: "Daily" },
+  ],
+  ar: [
+    { value: "monthly", label: "شهري" },
+    { value: "weekly", label: "أسبوعي" },
+    { value: "daily", label: "يومي" },
+  ],
+};
+
+const monthOptionsByLanguage: Record<Language, { value: string; label: string }[]> = {
+  en: [
+    { value: "1", label: "January" },
+    { value: "2", label: "February" },
+    { value: "3", label: "March" },
+    { value: "4", label: "April" },
+    { value: "5", label: "May" },
+    { value: "6", label: "June" },
+    { value: "7", label: "July" },
+    { value: "8", label: "August" },
+    { value: "9", label: "September" },
+    { value: "10", label: "October" },
+    { value: "11", label: "November" },
+    { value: "12", label: "December" },
+  ],
+  ar: [
+    { value: "1", label: "يناير" },
+    { value: "2", label: "فبراير" },
+    { value: "3", label: "مارس" },
+    { value: "4", label: "أبريل" },
+    { value: "5", label: "مايو" },
+    { value: "6", label: "يونيو" },
+    { value: "7", label: "يوليو" },
+    { value: "8", label: "أغسطس" },
+    { value: "9", label: "سبتمبر" },
+    { value: "10", label: "أكتوبر" },
+    { value: "11", label: "نوفمبر" },
+    { value: "12", label: "ديسمبر" },
+  ],
+};
+
+function formatPeriodRangeLabel(period: PayrollPeriod) {
+  if (period.period_type === "monthly") {
+    return `${period.year}-${String(period.month).padStart(2, "0")}`;
+  }
+  return `${period.start_date} → ${period.end_date}`;
+}
+
 function isComponentInRange(
   component: { is_recurring: boolean; created_at?: string; payroll_period?: number | null },
   payrollPeriodMap: Map<number, { start_date: string; end_date: string }>,
@@ -687,39 +763,108 @@ export function EmployeeProfilePage() {
     status: "active",
     enabled: Boolean(employeeId),
   });
-  const [attendanceRange] = useState(() => {
-    const now = new Date();
-    const year = now.getFullYear();
-    const month = now.getMonth() + 1;
-    const daysInMonth = new Date(year, month, 0).getDate();
-    const formattedMonth = String(month).padStart(2, "0");
-    return {
-      year,
-      month,
-      daysInMonth,
-      dateFrom: `${year}-${formattedMonth}-01`,
-      dateTo: `${year}-${formattedMonth}-${String(daysInMonth).padStart(2, "0")}`,
-    };
-  });
+  // Keep the period filter local to the summary section so no other employee tabs are affected.
+  const [summaryPeriodType, setSummaryPeriodType] = useState<PayrollPeriod["period_type"]>("monthly");
+  const [summaryMonth, setSummaryMonth] = useState<string>(() => String(new Date().getMonth() + 1));
+  const [summaryYear, setSummaryYear] = useState<string>(() => String(new Date().getFullYear()));
+  const [summaryStartDate, setSummaryStartDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [summaryEndDate, setSummaryEndDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const payrollPeriods = useMemo(() => payrollPeriodsQuery.data ?? [], [payrollPeriodsQuery.data]);
+  const effectiveSummaryEndDate =
+    summaryPeriodType === "daily" ? summaryStartDate : summaryEndDate;
+  const selectedSummaryPeriod = useMemo(() => {
+    if (summaryPeriodType === "monthly") {
+      const monthValue = Number(summaryMonth);
+      const yearValue = Number(summaryYear);
+      return (
+        payrollPeriods.find(
+          (period) =>
+            period.period_type === "monthly" &&
+            period.month === monthValue &&
+            period.year === yearValue
+        ) ?? null
+      );
+    }
+    if (summaryStartDate && effectiveSummaryEndDate) {
+      return (
+        payrollPeriods.find(
+          (period) =>
+            period.period_type === summaryPeriodType &&
+            period.start_date === summaryStartDate &&
+            period.end_date === effectiveSummaryEndDate
+        ) ?? null
+      );
+    }
+    return null;
+  }, [
+    effectiveSummaryEndDate,
+    payrollPeriods,
+    summaryMonth,
+    summaryPeriodType,
+    summaryStartDate,
+    summaryYear,
+  ]);
+  const summaryRange = useMemo(() => {
+    const selectedMonth = Number(summaryMonth);
+    const selectedYear = Number(summaryYear);
+    const hasValidMonth = Number.isInteger(selectedMonth) && selectedMonth >= 1 && selectedMonth <= 12;
+    const hasValidYear = Number.isInteger(selectedYear) && selectedYear >= 1900;
+    if (selectedSummaryPeriod) {
+      const start = new Date(selectedSummaryPeriod.start_date);
+      const end = new Date(selectedSummaryPeriod.end_date);
+      const days = Math.max(
+        Math.floor((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1,
+        1
+      );
+      return {
+        dateFrom: selectedSummaryPeriod.start_date,
+        dateTo: selectedSummaryPeriod.end_date,
+        days,
+      };
+    }
+    if (summaryPeriodType === "monthly" && hasValidMonth && hasValidYear) {
+      const daysInMonth = new Date(selectedYear, selectedMonth, 0).getDate();
+      const monthLabel = String(selectedMonth).padStart(2, "0");
+      return {
+        dateFrom: `${selectedYear}-${monthLabel}-01`,
+        dateTo: `${selectedYear}-${monthLabel}-${String(daysInMonth).padStart(2, "0")}`,
+        days: daysInMonth,
+      };
+    }
+    const dateFrom = summaryStartDate;
+    const dateTo = effectiveSummaryEndDate;
+    const start = new Date(dateFrom);
+    const end = new Date(dateTo);
+    const days = Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())
+      ? 1
+      : Math.max(Math.floor((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1, 1);
+    return { dateFrom, dateTo, days };
+  }, [
+    effectiveSummaryEndDate,
+    selectedSummaryPeriod,
+    summaryMonth,
+    summaryPeriodType,
+    summaryStartDate,
+    summaryYear,
+  ]);
   const attendanceQuery = useAttendanceRecordsQuery(
     {
-      dateFrom: attendanceRange.dateFrom,
-      dateTo: attendanceRange.dateTo,
+      dateFrom: summaryRange.dateFrom,
+      dateTo: summaryRange.dateTo,
       employeeId: employeeId ? String(employeeId) : undefined,
     },
-    Boolean(employeeId)
+    Boolean(employeeId)    
   );
   const commissionQuery = useCommissionApprovalsInboxQuery({
     status: "approved",
     employeeId: employeeId ?? undefined,
-    dateFrom: attendanceRange.dateFrom,
-    dateTo: attendanceRange.dateTo,
+    dateFrom: summaryRange.dateFrom,
+    dateTo: summaryRange.dateTo,
     enabled: Boolean(employeeId),
   });
-
   const payrollPeriodMap = useMemo(
     () =>
-      new Map(
+      new Map(        
         (payrollPeriodsQuery.data ?? []).map((period) => [
           period.id,
           { start_date: period.start_date, end_date: period.end_date },
@@ -1018,14 +1163,14 @@ export function EmployeeProfilePage() {
     const records = attendanceQuery.data ?? [];
     const presentDays = records.filter((record) => record.status !== "absent").length;
     const lateMinutes = records.reduce((sum, record) => sum + (record.late_minutes ?? 0), 0);
-    const absentDays = Math.max(attendanceRange.daysInMonth - presentDays, 0);
+    const absentDays = Math.max(summaryRange.days - presentDays, 0);    
     return { presentDays, lateMinutes, absentDays };
-  }, [attendanceQuery.data, attendanceRange.daysInMonth]);
+  }, [attendanceQuery.data, summaryRange.days]);
 
   const adjustmentTotals = useMemo(() => {
     const components = salaryComponentsQuery.data ?? [];
     const relevantComponents = components.filter((component) =>
-      isComponentInRange(component, payrollPeriodMap, attendanceRange.dateFrom, attendanceRange.dateTo)
+      isComponentInRange(component, payrollPeriodMap, summaryRange.dateFrom, summaryRange.dateTo)    
     );
     const bonuses = relevantComponents
       .filter((component) => component.type === "earning")
@@ -1048,12 +1193,12 @@ export function EmployeeProfilePage() {
       commissions,
     };
   }, [
-    attendanceRange.dateFrom,
-    attendanceRange.dateTo,
     commissionQuery.data,
     loanAdvancesQuery.data,
     payrollPeriodMap,
     salaryComponentsQuery.data,
+    summaryRange.dateFrom,
+    summaryRange.dateTo,    
   ]);
 
   const departmentOptions = departmentsQuery.data ?? [];
@@ -1071,7 +1216,16 @@ export function EmployeeProfilePage() {
   );
   const dailyRateValue = resolveDailyRate(salaryTypeValue, basicSalaryValue);
   const dailyRateLabel = dailyRateValue === null ? "—" : dailyRateValue.toFixed(2);
-  const bonusTotal = adjustmentTotals.bonuses;
+  const yearOptions = useMemo(() => {
+    const now = new Date().getFullYear();
+    return Array.from({ length: 5 }, (_, index) => {
+      const value = String(now - 2 + index);
+      return { value, label: value };
+    });
+  }, []);
+  const summaryLoading = attendanceQuery.isFetching || commissionQuery.isFetching;
+  const activeSummaryRangeLabel = `${summaryRange.dateFrom} → ${summaryRange.dateTo}`;
+  const bonusTotal = adjustmentTotals.bonuses;  
   const deductionTotal = adjustmentTotals.deductions;
   const advanceTotal = adjustmentTotals.advances;
   const commissionTotal = adjustmentTotals.commissions;
@@ -1208,9 +1362,11 @@ export function EmployeeProfilePage() {
         const content = pageCopy[language];
         const statusOptions = statusOptionsByLanguage[language];
         const salaryTypeOptions = salaryTypeOptionsByLanguage[language];
+        const periodTypeOptions = periodTypeOptionsByLanguage[language];
+        const monthOptions = monthOptionsByLanguage[language];
         const userOptions =
           selectableUserOptions.length > 0
-            ? selectableUserOptions
+            ? selectableUserOptions            
             : [{ value: "", label: content.fields.userEmpty }];
 
         return (
@@ -1836,7 +1992,82 @@ export function EmployeeProfilePage() {
                           <p>{content.payrollSummary.subtitle}</p>
                         </div>
                       </div>
-                      <div className="employee-profile__summary-grid">
+                      <div className="employee-profile__grid">
+                        <label className="form-field">
+                          <span>{content.payrollSummary.periodType}</span>
+                          <select
+                            value={summaryPeriodType}
+                            onChange={(event) =>
+                              setSummaryPeriodType(event.target.value as PayrollPeriod["period_type"])
+                            }
+                          >
+                            {periodTypeOptions.map((option) => (
+                              <option key={option.value} value={option.value}>
+                                {option.label}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                        {summaryPeriodType === "monthly" ? (
+                          <>
+                            <label className="form-field">
+                              <span>{content.payrollSummary.month}</span>
+                              <select
+                                value={summaryMonth}
+                                onChange={(event) => setSummaryMonth(event.target.value)}
+                              >
+                                {monthOptions.map((option) => (
+                                  <option key={option.value} value={option.value}>
+                                    {option.label}
+                                  </option>
+                                ))}
+                              </select>
+                            </label>
+                            <label className="form-field">
+                              <span>{content.payrollSummary.year}</span>
+                              <select
+                                value={summaryYear}
+                                onChange={(event) => setSummaryYear(event.target.value)}
+                              >
+                                {yearOptions.map((option) => (
+                                  <option key={option.value} value={option.value}>
+                                    {option.label}
+                                  </option>
+                                ))}
+                              </select>
+                            </label>
+                          </>
+                        ) : (
+                          <>
+                            <label className="form-field">
+                              <span>{content.payrollSummary.startDate}</span>
+                              <input
+                                type="date"
+                                value={summaryStartDate}
+                                onChange={(event) => setSummaryStartDate(event.target.value)}
+                              />
+                            </label>
+                            {summaryPeriodType !== "daily" && (
+                              <label className="form-field">
+                                <span>{content.payrollSummary.endDate}</span>
+                                <input
+                                  type="date"
+                                  value={summaryEndDate}
+                                  onChange={(event) => setSummaryEndDate(event.target.value)}
+                                />
+                              </label>
+                            )}
+                          </>
+                        )}
+                      </div>
+                      <p className="helper-text">
+                        {content.payrollSummary.activeRange}:{" "}
+                        {selectedSummaryPeriod
+                          ? formatPeriodRangeLabel(selectedSummaryPeriod)
+                          : activeSummaryRangeLabel}
+                      </p>
+                      {summaryLoading && <p className="helper-text">{content.payrollSummary.loading}</p>}
+                      <div className="employee-profile__summary-grid">                        
                         <div className="stat-card">
                           <div className="stat-card__top">
                             <span>{content.payrollSummary.presentDays}</span>
