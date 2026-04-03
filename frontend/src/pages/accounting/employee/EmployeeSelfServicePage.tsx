@@ -469,9 +469,12 @@ export function EmployeeSelfServicePage() {
     fallback: string,
     expandedPayable: number | null,
   ) {
+    // Keep Profile "Total Due" aligned with the exact payable source used by the payslip preview:
+    // 1) expanded payslip computed payable, 2) cached per-run payable derived from payslip inputs,
+    // 3) payroll-run detail net_total (same payload used by payslip), then final list fallback.
     if (expandedRunId === runId && expandedPayable != null) {
       return expandedPayable;
-    }
+    }    
     if (runPayables[runId] != null) {
       return runPayables[runId];
     }
