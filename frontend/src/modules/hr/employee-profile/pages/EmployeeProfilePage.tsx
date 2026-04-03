@@ -754,10 +754,6 @@ export function EmployeeProfilePage() {
     [salaryStructuresQuery.data]
   );
   const payrollPeriodsQuery = usePayrollPeriods();
-  const salaryComponentsQuery = useSalaryComponentsQuery({
-    salaryStructureId: salaryStructure?.id ?? null,
-    enabled: Boolean(salaryStructure?.id),
-  });
   // Keep the period filter local to the summary section so no other employee tabs are affected.  
   const [summaryPeriodType, setSummaryPeriodType] = useState<PayrollPeriod["period_type"]>("monthly");
   const [summaryMonth, setSummaryMonth] = useState<string>(() => String(new Date().getMonth() + 1));
@@ -842,7 +838,13 @@ export function EmployeeProfilePage() {
     summaryStartDate,
     summaryYear,
   ]);
-  const loanAdvancesQuery = useLoanAdvancesQuery({
+  const salaryComponentsQuery = useSalaryComponentsQuery({
+    salaryStructureId: salaryStructure?.id ?? null,
+    dateFrom: summaryRange.dateFrom,
+    dateTo: summaryRange.dateTo,
+    enabled: Boolean(salaryStructure?.id),
+  });
+  const loanAdvancesQuery = useLoanAdvancesQuery({    
     employeeId,
     status: "active",
     dateFrom: summaryRange.dateFrom,
@@ -1177,9 +1179,11 @@ export function EmployeeProfilePage() {
     const bonuses = relevantComponents
       .filter((component) => component.type === "earning")
       .reduce((sum, component) => sum + Number(component.amount || 0), 0);
+    // Deductions are now filtered by the selected period (same pattern as Advances)
+    // This ensures deductions appear only in their correct payroll month
     const deductions = relevantComponents
       .filter((component) => component.type === "deduction")
-      .reduce((sum, component) => sum + Number(component.amount || 0), 0);      
+      .reduce((sum, component) => sum + Number(component.amount || 0), 0);               
     // Advances are now filtered by the selected period to prevent showing old advances in future months
     const advances = (loanAdvancesQuery.data ?? [])
       .filter(

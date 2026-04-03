@@ -719,8 +719,10 @@ export function useUpdateSalaryStructure() {
 export function useSalaryComponentsQuery(params?: {
   employeeId?: number | null;
   salaryStructureId?: number | null;
+  dateFrom?: string;
+  dateTo?: string;
   enabled?: boolean;
-}) {
+}) {  
   return useQuery({
     queryKey: ["hr", "salary-components", params],
     enabled: params?.enabled ?? true,
@@ -731,9 +733,11 @@ export function useSalaryComponentsQuery(params?: {
           params: {
             employee: params?.employeeId ?? undefined,
             salary_structure: params?.salaryStructureId ?? undefined,
+            date_from: params?.dateFrom ?? undefined,
+            date_to: params?.dateTo ?? undefined,
           },
         }
-      );
+      );      
       if (Array.isArray(response.data)) {
         return response.data;
       }

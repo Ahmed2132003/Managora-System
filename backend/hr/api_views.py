@@ -363,15 +363,31 @@ class SalaryComponentViewSet(PermissionByActionMixin, CompanyScopedViewSet):
         ).filter(company=self._current_company())        
         salary_structure_id = self.request.query_params.get("salary_structure")
         employee_id = self.request.query_params.get("employee")
+        date_from = _parse_date_param(
+            self.request.query_params.get("date_from"), "date_from"
+        )
+        date_to = _parse_date_param(
+            self.request.query_params.get("date_to"), "date_to"
+        )
         if salary_structure_id:
             queryset = queryset.filter(salary_structure_id=salary_structure_id)
         if employee_id:
             queryset = queryset.filter(salary_structure__employee_id=employee_id)
+        if date_from:
+            queryset = queryset.filter(
+                Q(payroll_period__start_date__gte=date_from)
+                | Q(payroll_period__isnull=True, created_at__date__gte=date_from)
+            )
+        if date_to:
+            queryset = queryset.filter(
+                Q(payroll_period__end_date__lte=date_to)
+                | Q(payroll_period__isnull=True, created_at__date__lte=date_to)
+            )
         queryset = _restrict_adjustment_queryset(
             self.request.user, queryset, "salary_structure__employee"
         )
         return queryset.order_by("id")
-
+    
     queryset = SalaryComponent.objects.all()
     
     def perform_create(self, serializer):
