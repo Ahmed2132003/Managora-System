@@ -7,11 +7,9 @@ import {
   useDeleteEmployeeDocument,
   useMyEmployeeDocuments,
   useMyPayrollRuns,
-  type AttendanceRecord,
-  type PayrollRunDetail,
   usePayrollRun,
   useAttendanceRecordsQuery,
-  useUploadMyEmployeeDocument,
+  useUploadMyEmployeeDocument,  
   type DocumentCategory,
 } from "../../../shared/hr/hooks";
 import { http } from "../../../shared/api/http";
@@ -138,8 +136,7 @@ const pageCopy: Copy = {
 
 export function EmployeeSelfServicePage() {
   const [expandedRunId, setExpandedRunId] = useState<number | null>(null);
-  const [runPayables, setRunPayables] = useState<Record<number, number>>({});
-  const [hrName, setHrName] = useState("-");
+  const [hrName, setHrName] = useState("-");  
   const runsQuery = useMyPayrollRuns();
   const meQuery = useMe();
   const runDetailsQuery = usePayrollRun(expandedRunId);  
@@ -246,29 +243,25 @@ export function EmployeeSelfServicePage() {
     return basicSalary / 30;
   }
 
-  function buildRunSummary(
-    run: PayrollRunDetail | null | undefined,
-    attendanceRecords: AttendanceRecord[],
-    periodRange: { dateFrom: string; dateTo: string; days: number } | null,
-  ) {
-    if (!run || !periodRange) {
+  const expandedRunSummary = useMemo(() => {
+    if (!expandedRunDetails || !expandedRunRange) {
       return null;
     }
 
-    const records = attendanceRecords ?? [];
+    const records = attendanceQuery.data ?? [];
     const presentDays = records.filter((record) => record.status !== "absent").length;
-    const absentDays = Math.max(periodRange.days - presentDays, 0);
+    const absentDays = Math.max(expandedRunRange.days - presentDays, 0);
     const lateMinutes = records.reduce(
       (sum, record) => sum + (record.late_minutes ?? 0),
       0,
     );
-    const lines = run.lines ?? [];
+    const lines = expandedRunDetails.lines ?? [];
     const basicLine = lines.find((line) => line.code.toUpperCase() === "BASIC");
     const basicAmount = basicLine ? parseAmount(basicLine.amount) : 0;
     const metaRate = basicLine?.meta?.rate;
     const dailyRate = metaRate
       ? parseAmount(metaRate)
-      : resolveDailyRateByPeriod(run.period.period_type, basicAmount);
+      : resolveDailyRateByPeriod(expandedRunDetails.period.period_type, basicAmount);
 
     const bonuses = lines
       .filter(
@@ -300,26 +293,19 @@ export function EmployeeSelfServicePage() {
       advances,
       dailyRate: dailyRate ?? 0,
     };
-  }
+  }, [attendanceQuery.data, expandedRunDetails, expandedRunRange]);
 
-  function calculatePayableTotal(summary: ReturnType<typeof buildRunSummary>) {
-    if (!summary) return null;
-    return (
-      summary.presentDays * summary.dailyRate +
-      summary.bonuses +
-      summary.commissions -
-      summary.deductions -
-      summary.advances
-    );
-  }
-
-  const expandedRunSummary = useMemo(
-    () => buildRunSummary(expandedRunDetails, attendanceQuery.data ?? [], expandedRunRange),
-    [attendanceQuery.data, expandedRunDetails, expandedRunRange],
-  );
   const expandedRunPayable = useMemo(() => {
-    const calculated = calculatePayableTotal(expandedRunSummary);
-    return calculated ?? parseAmount(expandedRunDetails?.net_total ?? 0);
+    if (!expandedRunSummary) {
+      return parseAmount(expandedRunDetails?.net_total ?? 0);
+    }
+    return (
+      expandedRunSummary.presentDays * expandedRunSummary.dailyRate +
+      expandedRunSummary.bonuses +
+      expandedRunSummary.commissions -
+      expandedRunSummary.deductions -
+      expandedRunSummary.advances
+    );
   }, [expandedRunDetails?.net_total, expandedRunSummary]);
 
   const currentUserName = useMemo(() => {
@@ -338,21 +324,6 @@ export function EmployeeSelfServicePage() {
 
   const isSuperUser = meQuery.data?.user.is_superuser ?? false;
   const managerName = roleNames.includes("manager") || isSuperUser ? currentUserName : "-";
-
-  useEffect(() => {
-    if (expandedRunId == null || expandedRunPayable == null) {
-      return;
-    }
-    setRunPayables((prev) => {
-      if (prev[expandedRunId] === expandedRunPayable) {
-        return prev;
-      }
-      return {
-        ...prev,
-        [expandedRunId]: expandedRunPayable,
-      };
-    });
-  }, [expandedRunId, expandedRunPayable]);
 
   useEffect(() => {
     let cancelled = false;
@@ -399,17 +370,13 @@ export function EmployeeSelfServicePage() {
     expandedPayable: number | null,
   ) {
     // Keep Profile "Total Due" aligned with the exact payable source used by the payslip preview:
-    // 1) expanded payslip computed payable, 2) cached per-run payable derived from payslip inputs,
-    // 3) payroll-run detail net_total (same payload used by payslip), then final list fallback.
+    // 1) expanded payslip computed payable, 2) payroll-run net_total fallback from API/list payload.    
     if (expandedRunId === runId && expandedPayable != null) {
       return expandedPayable;
     }    
-    if (runPayables[runId] != null) {
-      return runPayables[runId];
-    }
     return parseAmount(fallback);
   }
-
+  
   return (
     <DashboardShell
       copy={{
