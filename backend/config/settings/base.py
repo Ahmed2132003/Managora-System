@@ -215,24 +215,36 @@ CORS_ALLOWED_ORIGIN_REGEXES = [
 CORS_ALLOW_CREDENTIALS = True
 
 # Caching
-DEFAULT_REDIS_HOST = "redis" if Path("/.dockerenv").exists() else "localhost"
+# Always default to the Docker service name for inter-container traffic.
+# This avoids accidental localhost usage inside containers.
+DEFAULT_REDIS_HOST = os.getenv("REDIS_HOST", "redis")
 DEFAULT_REDIS_PORT = os.getenv("REDIS_PORT", "6379")
 DEFAULT_REDIS_DB = os.getenv("CACHE_REDIS_DB", "1")
 REDIS_URL = os.getenv("REDIS_URL", f"redis://{DEFAULT_REDIS_HOST}:{DEFAULT_REDIS_PORT}/{DEFAULT_REDIS_DB}")
+
+REDIS_RETRY_ON_TIMEOUT = os.getenv("REDIS_RETRY_ON_TIMEOUT", "1") == "1"
+REDIS_SOCKET_CONNECT_TIMEOUT = float(os.getenv("CACHE_SOCKET_CONNECT_TIMEOUT", "0.5"))
+REDIS_SOCKET_TIMEOUT = float(os.getenv("CACHE_SOCKET_TIMEOUT", "0.5"))
+REDIS_MAX_CONNECTIONS = int(os.getenv("CACHE_MAX_CONNECTIONS", "100"))
+REDIS_HEALTH_CHECK_INTERVAL = int(os.getenv("CACHE_HEALTH_CHECK_INTERVAL", "30"))
+
 REDIS_CACHE = {
     "BACKEND": "django.core.cache.backends.redis.RedisCache",
-    "LOCATION": REDIS_URL,    
+    "LOCATION": REDIS_URL,
     "TIMEOUT": int(os.getenv("CACHE_DEFAULT_TIMEOUT", "300")),
     "KEY_PREFIX": os.getenv("CACHE_KEY_PREFIX", "managora"),
     "OPTIONS": {
-        "db": int(os.getenv("CACHE_REDIS_DB", "1")),
+        "db": int(DEFAULT_REDIS_DB),
         "pool_class": "redis.ConnectionPool",
-        "socket_connect_timeout": float(os.getenv("CACHE_SOCKET_CONNECT_TIMEOUT", "0.5")),
-        "socket_timeout": float(os.getenv("CACHE_SOCKET_TIMEOUT", "0.5")),
-        "max_connections": int(os.getenv("CACHE_MAX_CONNECTIONS", "100")),
-        "health_check_interval": int(os.getenv("CACHE_HEALTH_CHECK_INTERVAL", "30")),
+        "socket_connect_timeout": REDIS_SOCKET_CONNECT_TIMEOUT,
+        "socket_timeout": REDIS_SOCKET_TIMEOUT,
+        "retry_on_timeout": REDIS_RETRY_ON_TIMEOUT,
+        "socket_keepalive": True,
+        "max_connections": REDIS_MAX_CONNECTIONS,
+        "health_check_interval": REDIS_HEALTH_CHECK_INTERVAL,
     },
 }
+
 LOCMEM_CACHE = {
     "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
     "LOCATION": os.getenv("LOCMEM_CACHE_LOCATION", "managora-fallback-cache"),

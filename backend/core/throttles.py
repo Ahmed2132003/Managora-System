@@ -9,9 +9,11 @@ from rest_framework.throttling import SimpleRateThrottle, UserRateThrottle
 try:
     from redis.exceptions import ConnectionError as RedisConnectionError
     from redis.exceptions import TimeoutError as RedisTimeoutError
+    from redis.exceptions import RedisError
 except Exception:  # pragma: no cover - redis should exist, this is a hardening fallback.
     RedisConnectionError = OSError
     RedisTimeoutError = TimeoutError
+    RedisError = OSError
 
 logger = logging.getLogger(__name__)
 
@@ -27,6 +29,10 @@ class _DefaultRateMixin:
 
 
 class ThrottlingToggleMixin:
+    def _is_auth_endpoint(self, request):
+        path = getattr(request, "path", "") or ""
+        return "/auth/" in path
+
     def _resolve_fallback_cache(self):
         fallback_alias = getattr(settings, "THROTTLE_FALLBACK_CACHE_ALIAS", "locmem")
         try:
@@ -41,8 +47,16 @@ class ThrottlingToggleMixin:
             return True
         try:
             return super().allow_request(request, view)
-        except (RedisConnectionError, RedisTimeoutError, ConnectionError, OSError) as exc:
+        except (RedisConnectionError, RedisTimeoutError, RedisError, ConnectionError, OSError) as exc:
             # Never fail auth/critical endpoints due to a temporary cache outage.
+            if self._is_auth_endpoint(request):
+                logger.warning(
+                    "Redis unavailable during auth throttle check (%s). Allowing request for %s.",
+                    exc,
+                    self.__class__.__name__,
+                )
+                return True
+
             self.cache = self._resolve_fallback_cache()
             logger.warning(
                 "Throttle cache backend unavailable (%s). Falling back to '%s' cache alias for %s.",
