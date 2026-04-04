@@ -1289,10 +1289,46 @@ class HRActionViewSet(
             company=self.request.user.company
         )
         employee_id = self.request.query_params.get("employee_id")
+        date_from = _parse_date_param(
+            self.request.query_params.get("date_from"), "date_from"
+        )
+        date_to = _parse_date_param(
+            self.request.query_params.get("date_to"), "date_to"
+        )
         if employee_id:
             queryset = queryset.filter(employee_id=employee_id)
+        if date_from and date_to:
+            queryset = queryset.filter(
+                Q(attendance_record__date__range=(date_from, date_to))
+                | Q(period_end__range=(date_from, date_to))
+                | Q(
+                    attendance_record__isnull=True,
+                    period_end__isnull=True,
+                    created_at__date__range=(date_from, date_to),
+                )
+            )
+        else:
+            if date_from:
+                queryset = queryset.filter(
+                    Q(attendance_record__date__gte=date_from)
+                    | Q(period_end__gte=date_from)
+                    | Q(
+                        attendance_record__isnull=True,
+                        period_end__isnull=True,
+                        created_at__date__gte=date_from,
+                    )
+                )
+            if date_to:
+                queryset = queryset.filter(
+                    Q(attendance_record__date__lte=date_to)
+                    | Q(period_end__lte=date_to)
+                    | Q(
+                        attendance_record__isnull=True,
+                        period_end__isnull=True,
+                        created_at__date__lte=date_to,
+                    )
+                )
         return queryset.order_by("-created_at")
-
 
 
 @extend_schema_view(

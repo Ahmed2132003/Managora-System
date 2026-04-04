@@ -26,8 +26,9 @@ import {
   useCreateLoanAdvance,
   useCommissionApprovalsInboxQuery,
   useAttendanceRecordsQuery,
+  useHrActionsQuery,
   useCreateSalaryStructure,
-  useUpdateSalaryStructure,
+  useUpdateSalaryStructure,  
   useShifts,
   useUpdateEmployee,
   useUploadEmployeeDocument,  
@@ -866,6 +867,12 @@ export function EmployeeProfilePage() {
     dateTo: summaryRange.dateTo,
     enabled: Boolean(employeeId),
   });
+  const hrActionsQuery = useHrActionsQuery({
+    employeeId: employeeId ?? undefined,
+    dateFrom: summaryRange.dateFrom,
+    dateTo: summaryRange.dateTo,
+    enabled: Boolean(employeeId),
+  });  
   const payrollPeriodMap = useMemo(
     () =>
       new Map(        
@@ -1179,11 +1186,15 @@ export function EmployeeProfilePage() {
     const bonuses = relevantComponents
       .filter((component) => component.type === "earning")
       .reduce((sum, component) => sum + Number(component.amount || 0), 0);
-    // Deductions are now filtered by the selected period (same pattern as Advances)
-    // This ensures deductions appear only in their correct payroll month
-    const deductions = relevantComponents
+    const componentDeductions = relevantComponents
       .filter((component) => component.type === "deduction")
-      .reduce((sum, component) => sum + Number(component.amount || 0), 0);               
+      .reduce((sum, component) => sum + Number(component.amount || 0), 0);
+    // Deductions are now correctly filtered by the selected period
+    // This ensures consistency with payroll generation for the same month
+    const hrActionDeductions = (hrActionsQuery.data ?? [])
+      .filter((action) => action.action_type === "deduction")
+      .reduce((sum, action) => sum + Number(action.value || 0), 0);
+    const deductions = componentDeductions + hrActionDeductions;                 
     // Advances are now filtered by the selected period to prevent showing old advances in future months
     const advances = (loanAdvancesQuery.data ?? [])
       .filter(
@@ -1205,7 +1216,8 @@ export function EmployeeProfilePage() {
     };
   }, [
     commissionQuery.data,
-    loanAdvancesQuery.data,
+    hrActionsQuery.data,
+    loanAdvancesQuery.data,    
     payrollPeriodMap,
     salaryComponentsQuery.data,
     summaryRange.dateFrom,

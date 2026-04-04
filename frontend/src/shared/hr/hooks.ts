@@ -1336,18 +1336,26 @@ export function useCreatePolicyRuleMutation() {
   });
 }
 
-export function useHrActionsQuery(params?: { employeeId?: number }) {
+export function useHrActionsQuery(params?: {
+  employeeId?: number;
+  dateFrom?: string;
+  dateTo?: string;
+  enabled?: boolean;
+}) {
   return useQuery({
     queryKey: ["policies", "actions", params],
+    enabled: params?.enabled ?? true,
     queryFn: async () => {
       const response = await http.get<HRAction[]>(endpoints.hr.hrActions, {
         params: {
           employee_id: params?.employeeId,
+          date_from: params?.dateFrom ?? undefined,
+          date_to: params?.dateTo ?? undefined,
         },
       });
       return response.data;
     },
-  });
+  });  
 }
 
 export function useUpdateHrActionMutation() {
