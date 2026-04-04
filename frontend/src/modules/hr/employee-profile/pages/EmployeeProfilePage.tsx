@@ -1170,6 +1170,17 @@ export function EmployeeProfilePage() {
     }
   }
 
+  const salaryTypeValue = useWatch({
+    control: salaryForm.control,
+    name: "salary_type",
+  });
+  const basicSalaryValue = Number(
+    useWatch({
+      control: salaryForm.control,
+      name: "basic_salary",
+    }) || 0
+  );
+
   const attendanceStats = useMemo(() => {
     const records = attendanceQuery.data ?? [];
     const presentDays = records.filter((record) => record.status !== "absent").length;
@@ -1181,7 +1192,7 @@ export function EmployeeProfilePage() {
   const adjustmentTotals = useMemo(() => {
     const components = salaryComponentsQuery.data ?? [];
     const relevantComponents = components.filter((component) =>
-      isComponentInRange(component, payrollPeriodMap, summaryRange.dateFrom, summaryRange.dateTo)    
+      isComponentInRange(component, payrollPeriodMap, summaryRange.dateFrom, summaryRange.dateTo)
     );
     const bonuses = relevantComponents
       .filter((component) => component.type === "earning")
@@ -1189,12 +1200,16 @@ export function EmployeeProfilePage() {
     const componentDeductions = relevantComponents
       .filter((component) => component.type === "deduction")
       .reduce((sum, component) => sum + Number(component.amount || 0), 0);
-    // Deductions are now correctly filtered by the selected period
-    // This ensures consistency with payroll generation for the same month
     const hrActionDeductions = (hrActionsQuery.data ?? [])
       .filter((action) => action.action_type === "deduction")
       .reduce((sum, action) => sum + Number(action.value || 0), 0);
-    const deductions = componentDeductions + hrActionDeductions;                 
+    const summaryDailyRate = resolveDailyRate(salaryTypeValue, basicSalaryValue);
+    const minuteRate = summaryDailyRate === null ? null : summaryDailyRate / 480;
+    const lateMinutesDeduction =
+      minuteRate === null ? 0 : Number((minuteRate * attendanceStats.lateMinutes).toFixed(2));
+    // Total Deductions = Regular Deductions + Late Minutes Deduction
+    // This ensures consistency with Payroll Generation and Employee Profile for the same period
+    const deductions = componentDeductions + hrActionDeductions + lateMinutesDeduction;
     // Advances are now filtered by the selected period to prevent showing old advances in future months
     const advances = (loanAdvancesQuery.data ?? [])
       .filter(
@@ -1218,25 +1233,18 @@ export function EmployeeProfilePage() {
     commissionQuery.data,
     hrActionsQuery.data,
     loanAdvancesQuery.data,    
+    attendanceStats.lateMinutes,
+    basicSalaryValue,
     payrollPeriodMap,
     salaryComponentsQuery.data,
+    salaryTypeValue,
     summaryRange.dateFrom,
-    summaryRange.dateTo,    
+    summaryRange.dateTo,
   ]);
 
   const departmentOptions = departmentsQuery.data ?? [];
   const jobTitleOptions = jobTitlesQuery.data ?? [];
   const shiftOptions = shiftsQuery.data ?? [];
-  const salaryTypeValue = useWatch({
-    control: salaryForm.control,
-    name: "salary_type",
-  });
-  const basicSalaryValue = Number(
-    useWatch({
-      control: salaryForm.control,
-      name: "basic_salary",
-    }) || 0
-  );
   const dailyRateValue = resolveDailyRate(salaryTypeValue, basicSalaryValue);
   const dailyRateLabel = dailyRateValue === null ? "—" : dailyRateValue.toFixed(2);
   const yearOptions = useMemo(() => {
