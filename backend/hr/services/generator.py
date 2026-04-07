@@ -1,6 +1,7 @@
 from calendar import monthrange
 from datetime import date
 from decimal import Decimal
+import logging
 
 from django.db import transaction
 from django.db.models import Q, Sum
@@ -23,6 +24,7 @@ from hr.models import (
 
 WORKING_DAYS_PER_MONTH = Decimal("30")
 MINUTES_PER_DAY = Decimal("480")
+logger = logging.getLogger(__name__)
 
 
 def _resolve_daily_rate(salary_structure: SalaryStructure) -> Decimal | None:
@@ -51,6 +53,20 @@ def _overlap_days(start_date, end_date, range_start, range_end):
     if overlap_start > overlap_end:
         return Decimal("0")
     return Decimal((overlap_end - overlap_start).days + 1)
+
+
+def _salary_type_matches_period(*, salary_type: str, period_type: str) -> bool:
+    """Keep legacy compatibility while allowing attendance-based salaries in monthly runs."""
+    if salary_type == SalaryStructure.SalaryType.COMMISSION:
+        return True
+    if salary_type == period_type:
+        return True
+    if period_type == PayrollPeriod.PeriodType.MONTHLY and salary_type in {
+        SalaryStructure.SalaryType.DAILY,
+        SalaryStructure.SalaryType.WEEKLY,
+    }:
+        return True
+    return False
 
 
 def generate_period(company, year=None, month=None, actor=None, period=None):
@@ -83,12 +99,24 @@ def generate_period(company, year=None, month=None, actor=None, period=None):
     employees = Employee.objects.filter(
         company=company, status=Employee.Status.ACTIVE
     ).select_related("salary_structure")
-
+    employee_count = employees.count()
+    
     summary = {"generated": 0, "skipped": []}
     
     period_type = period.period_type
+    logger.info(
+        "Starting payroll generation",
+        extra={
+            "company_id": company.id,
+            "period_id": period.id,
+            "period_type": period_type,
+            "start_date": str(start_date),
+            "end_date": str(end_date),
+            "eligible_employee_count": employee_count,
+        },
+    )
     with transaction.atomic():
-        for employee in employees:
+        for employee in employees:            
             salary_structure = getattr(employee, "salary_structure", None)
             if not salary_structure:
                 summary["skipped"].append(                    
@@ -99,9 +127,9 @@ def generate_period(company, year=None, month=None, actor=None, period=None):
                 )
                 continue
 
-            if (
-                salary_structure.salary_type != SalaryStructure.SalaryType.COMMISSION
-                and salary_structure.salary_type != period_type
+            if not _salary_type_matches_period(
+                salary_type=salary_structure.salary_type,
+                period_type=period_type,                
             ):
                 summary["skipped"].append(
                     {
@@ -120,9 +148,10 @@ def generate_period(company, year=None, month=None, actor=None, period=None):
                 employee=employee,
                 date__range=(start_date, end_date),
             )
+            attendance_count = attendance_qs.count()
             present_days = Decimal(
                 attendance_qs.exclude(status=AttendanceRecord.Status.ABSENT).count()
-            )
+            )            
             absent_days = Decimal(
                 attendance_qs.filter(status=AttendanceRecord.Status.ABSENT).count()
             )
@@ -384,11 +413,38 @@ def generate_period(company, year=None, month=None, actor=None, period=None):
                 },
             )
             run.lines.all().delete()
-
+            
             for line in lines:
                 line.payroll_run = run
             PayrollLine.objects.bulk_create(lines)
 
             summary["generated"] += 1
+
+            for line in lines:
+                line.payroll_run = run
+            PayrollLine.objects.bulk_create(lines)
+
+            if attendance_count > 0 and not lines:
+                logger.warning(
+                    "Payroll run created without payroll lines despite attendance",
+                    extra={
+                        "company_id": company.id,
+                        "period_id": period.id,
+                        "employee_id": employee.id,
+                        "attendance_count": attendance_count,
+                    },
+                )
+
+            summary["generated"] += 1
+
+    logger.info(
+        "Completed payroll generation",
+        extra={
+            "company_id": company.id,
+            "period_id": period.id,
+            "generated_count": summary["generated"],
+            "skipped_count": len(summary["skipped"]),
+        },
+    )
 
     return summary

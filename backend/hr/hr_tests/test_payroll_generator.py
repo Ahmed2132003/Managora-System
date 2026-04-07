@@ -211,3 +211,25 @@ class PayrollGeneratorTests(TestCase):
         self.assertFalse(
             march_run.lines.filter(code=f"COMP-{feb_component.id}").exists()
         )
+
+    def test_generate_period_monthly_includes_daily_salary_employee_with_attendance(self):
+        employee = self._create_employee_with_structure("EMP-004")
+        SalaryStructure.objects.filter(employee=employee).update(
+            salary_type=SalaryStructure.SalaryType.DAILY,
+            basic_salary=Decimal("120.00"),
+        )
+        AttendanceRecord.objects.create(
+            company=self.company,
+            employee=employee,
+            date=date(2026, 7, 3),
+            method=AttendanceRecord.Method.MANUAL,
+            status=AttendanceRecord.Status.PRESENT,
+        )
+        period = PayrollPeriod.objects.create(company=self.company, year=2026, month=7)
+
+        summary = generate_period(self.company, actor=self.actor, period=period)
+
+        self.assertEqual(summary["generated"], 1)
+        run = PayrollRun.objects.get(period=period, employee=employee)
+        self.assertTrue(run.lines.exists())
+        self.assertTrue(run.lines.filter(code="BASIC").exists())
