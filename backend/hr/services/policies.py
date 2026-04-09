@@ -2,11 +2,21 @@ from __future__ import annotations
 
 from datetime import timedelta
 from decimal import Decimal
+import logging
 
 from django.utils import timezone
 
-from hr.models import AttendanceRecord, HRAction, PayrollPeriod, PolicyRule, SalaryStructure
+from hr.models import (
+    AttendanceRecord,
+    HRAction,
+    PayrollPeriod,
+    PolicyRule,
+    SalaryStructure,
+)
 from hr.services.actions import sync_hr_action_deduction_component
+
+logger = logging.getLogger(__name__)
+
 
 def _resolve_payroll_period(
     *,
@@ -45,6 +55,7 @@ def _resolve_payroll_period(
         )
     return period_qs.order_by("-start_date", "-id").first()
 
+
 def create_hr_action_if_not_exists(
     *,
     rule: PolicyRule,
@@ -55,6 +66,26 @@ def create_hr_action_if_not_exists(
     period_end=None,
     reason: str,
 ) -> HRAction | None:
+    resolved_company_id = company_id
+    if attendance_record:
+        if not attendance_record.company_id:
+            logger.warning(
+                "HR_ACTION_CREATE_SKIPPED_ATTENDANCE_WITHOUT_COMPANY attendance_record_id=%s employee_id=%s rule_id=%s",
+                attendance_record.id,
+                attendance_record.employee_id,
+                rule.id,
+            )
+            return None
+        resolved_company_id = attendance_record.company_id
+
+    if not resolved_company_id:
+        logger.warning(
+            "HR_ACTION_CREATE_SKIPPED_MISSING_COMPANY employee_id=%s rule_id=%s",
+            employee_id,
+            rule.id,
+        )
+        return None
+
     action_type = rule.action_type
     value = rule.action_value if rule.action_value is not None else Decimal("0")
     period = None
@@ -62,12 +93,10 @@ def create_hr_action_if_not_exists(
         reference_date = (
             attendance_record.date
             if attendance_record
-            else period_end
-            or period_start
-            or timezone.localdate()
+            else period_end or period_start or timezone.localdate()            
         )
         period = _resolve_payroll_period(
-            company_id=company_id,
+            company_id=resolved_company_id,            
             employee_id=employee_id,
             reference_date=reference_date,
         )
@@ -75,14 +104,14 @@ def create_hr_action_if_not_exists(
             period_start, period_end = period.start_date, period.end_date
     if attendance_record:
         if HRAction.objects.filter(
-            company_id=company_id,
-            employee_id=employee_id,            
+            company_id=resolved_company_id,
+            employee_id=employee_id,                    
             rule=rule,
             attendance_record=attendance_record,
         ).exists():
             return None
         action = HRAction.objects.create(
-            company_id=company_id,
+            company_id=resolved_company_id,            
             employee_id=employee_id,
             rule=rule,
             attendance_record=attendance_record,
@@ -93,12 +122,13 @@ def create_hr_action_if_not_exists(
             period_end=period_end,
         )
         if action_type == HRAction.ActionType.DEDUCTION and period:
-            sync_hr_action_deduction_component(action)            
+            sync_hr_action_deduction_component(action)                   
         return action
+    
     
     if period_start and period_end:
         if HRAction.objects.filter(
-            company_id=company_id,
+            company_id=resolved_company_id,            
             employee_id=employee_id,
             rule=rule,
             period_start=period_start,
@@ -106,7 +136,7 @@ def create_hr_action_if_not_exists(
         ).exists():
             return None
         action = HRAction.objects.create(
-            company_id=company_id,
+            company_id=resolved_company_id,            
             employee_id=employee_id,
             rule=rule,
             attendance_record=None,
@@ -120,6 +150,7 @@ def create_hr_action_if_not_exists(
             sync_hr_action_deduction_component(action)
         return action
     return None
+
 def apply_late_over_minutes_rule(
     rule: PolicyRule,
     attendance_record: AttendanceRecord,

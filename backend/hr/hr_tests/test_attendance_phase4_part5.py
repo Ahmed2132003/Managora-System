@@ -10,8 +10,21 @@ from rest_framework.exceptions import PermissionDenied
 from rest_framework.test import APIRequestFactory, APITestCase
 
 from core.models import Company, Permission, Role, RolePermission, UserRole
-from hr.models import AttendanceRecord, Employee, Shift, WorkSite
-from hr.attendance.serializers import AttendanceActionSerializer, AttendanceSelfVerifyOtpSerializer
+from hr.models import (
+    AttendanceRecord,
+    Employee,
+    HRAction,
+    PayrollPeriod,
+    PolicyRule,
+    SalaryComponent,
+    SalaryStructure,
+    Shift,
+    WorkSite,
+)
+from hr.attendance.serializers import (
+    AttendanceActionSerializer,
+    AttendanceSelfVerifyOtpSerializer,
+)
 from hr.services.attendance import check_in, check_out, generate_qr_token
 
 User = get_user_model()
@@ -130,15 +143,18 @@ class AttendancePhase4Part5ApiTests(APITestCase):
             username="hr", password="pass123", company=self.company
         )
         self.employee_user = User.objects.create_user(
-            username="employee", password="pass123", company=self.company
+            username="employee",
+            password="pass123",
+            company=self.company,
+            email="employee@company-a.test",            
         )
 
         self.hr_role, _ = Role.objects.get_or_create(company=self.company, name="HR")
         self.attendance_permission, _ = Permission.objects.get_or_create(
             code="attendance.*",
             defaults={"name": "attendance.*"},
-        )        
-        RolePermission.objects.get_or_create(                                                      
+        )
+        RolePermission.objects.get_or_create(                                                                                                  
             role=self.hr_role, permission=self.attendance_permission
         )
         UserRole.objects.get_or_create(user=self.hr_user, role=self.hr_role)
@@ -213,7 +229,7 @@ class AttendancePhase4Part5ApiTests(APITestCase):
         )
 
         self.auth("hr")
-        url = reverse("attendance-list")        
+        url = reverse("attendance-list")              
         res = self.client.get(url)
         self.assertEqual(res.status_code, status.HTTP_200_OK)
         self.assertEqual(len(res.data), 1)
@@ -227,15 +243,84 @@ class AttendancePhase4Part5ApiTests(APITestCase):
             "method": AttendanceRecord.Method.QR,
             "qr_token": token_data["token"],
             "lat": 30.044420,
-            "lng": 31.235712,                      
+            "lng": 31.235712,                                 
         }
 
         self.auth("employee")
         with patch("hr.services.attendance.timezone.now", return_value=fixed_now):
-            res = self.client.post(reverse("attendance-check-in"), payload, format="json")
-
+            res = self.client.post(
+                reverse("attendance-check-in"), payload, format="json"
+            )
+            
         self.assertEqual(res.status_code, status.HTTP_201_CREATED)
         self.assertEqual(res.data["method"], AttendanceRecord.Method.QR)
+
+    def test_deduction_component_requires_company_and_does_not_crash(self):
+        PolicyRule.objects.create(
+            company=self.company,
+            name="Late > 5 minutes deduction",
+            rule_type=PolicyRule.RuleType.LATE_OVER_MINUTES,
+            threshold=5,
+            period_days=None,
+            action_type=PolicyRule.ActionType.DEDUCTION,
+            action_value="75.00",
+            is_active=True,
+        )
+        SalaryStructure.objects.create(
+            company=self.company,
+            employee=self.employee,
+            basic_salary="3000.00",
+            salary_type=SalaryStructure.SalaryType.MONTHLY,
+        )
+        PayrollPeriod.objects.create(
+            company=self.company,
+            period_type=PayrollPeriod.PeriodType.MONTHLY,
+            year=2025,
+            month=1,
+            start_date=date(2025, 1, 1),
+            end_date=date(2025, 1, 31),
+        )
+
+        self.auth("employee")
+        fixed_now = timezone.make_aware(datetime(2025, 1, 10, 9, 20))
+        with patch(
+            "hr.services.attendance.timezone.now", return_value=fixed_now
+        ), patch(
+            "hr.services.attendance.secrets.randbelow",
+            return_value=123456,
+        ):
+            # Create a second request with deterministic OTP code.
+            request_otp_res = self.client.post(
+                reverse("attendance-request-otp"),
+                {"purpose": "check_in"},
+                format="json",
+            )
+            self.assertEqual(request_otp_res.status_code, status.HTTP_201_CREATED)
+            request_id = request_otp_res.data["request_id"]
+            res = self.client.post(
+                reverse("attendance-verify-otp"),
+                {
+                    "request_id": request_id,
+                    "code": "123456",
+                    "lat": "30.044420",
+                    "lng": "31.235712",
+                },
+                format="json",
+            )
+
+        self.assertEqual(res.status_code, status.HTTP_201_CREATED)
+        action = HRAction.objects.get(
+            company=self.company,
+            employee=self.employee,
+            action_type=HRAction.ActionType.DEDUCTION,
+        )
+        component = SalaryComponent.objects.get(
+            company=self.company,
+            salary_structure__employee=self.employee,
+            name=f"HR action deduction: Late > 5 minutes deduction (#{action.id})",
+        )
+        self.assertEqual(component.company_id, self.company.id)
+        self.assertIsNotNone(component.company_id)
 
 
 class AttendanceCoordinatesValidationTests(TestCase):
