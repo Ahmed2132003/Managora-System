@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import logging
-from typing import Iterable
 
 logger = logging.getLogger(__name__)
 
@@ -29,7 +28,8 @@ def get_user_roles(user) -> list[str]:
     roles = [name for name in role_names if name]
 
     for role in roles:
-        assert role in VALID_ROLES, f"Invalid role detected for user {getattr(user, 'id', None)}: {role}"
+        if role not in VALID_ROLES:
+            raise Exception("Invalid role detected")
 
     if not roles:
         logger.warning(
@@ -46,15 +46,8 @@ def get_user_role(user) -> str:
         return "EMPLOYEE"
     if getattr(user, "is_superuser", False):
         return "SUPERUSER"
-
     roles = set(get_user_roles(user))
     for role in ROLE_PRIORITY:
         if role in roles:
             return role
-
-    logger.warning(
-        "RBAC_ROLE_UNKNOWN user_id=%s roles=%s fallback=EMPLOYEE",
-        getattr(user, "id", None),
-        sorted(roles),
-    )
     return "EMPLOYEE"

@@ -1,25 +1,28 @@
 import type { MeResponse } from "./useMe";
 
-export type AppRole = "manager" | "hr" | "accountant" | "employee";
+export type AppRole = "superuser" | "manager" | "hr" | "accountant" | "employee";
 
 const ROLE_PRIORITY: AppRole[] = ["manager", "hr", "accountant", "employee"];
 
-export function resolvePrimaryRole(me?: MeResponse): AppRole | null {
+export function resolvePrimaryRole(me?: MeResponse): AppRole {
   if (!me) {
-    return null;
+    return "employee";
   }
-  if (me.user?.is_superuser) {    
-    return "manager";
+  if (me.user?.is_superuser) {
+    return "superuser";
   }
 
   const roleSet = new Set(
-    (me.roles ?? []).map((role) => (role.slug || role.name || "").trim().toLowerCase())    
+    (me.roles ?? []).map((role) => (role.slug || role.name || "").trim().toLowerCase())
   );
 
-  return ROLE_PRIORITY.find((role) => roleSet.has(role)) ?? null;
+  return ROLE_PRIORITY.find((role) => roleSet.has(role)) ?? "employee";
 }
 
-export function getDefaultPathForRole(role: AppRole | null): string {
+export function getDefaultPathForRole(role: AppRole): string {
+  if (role === "superuser" || role === "manager") {
+    return "/dashboard";
+  }
   if (role === "hr") {
     return "/analytics/hr";
   }
@@ -29,5 +32,5 @@ export function getDefaultPathForRole(role: AppRole | null): string {
   if (role === "employee") {
     return "/employee/self-service";
   }
-  return "/dashboard";
+  return "/employee/self-service";
 }

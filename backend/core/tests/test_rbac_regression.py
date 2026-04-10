@@ -82,7 +82,7 @@ class RBACRegressionTests(TestCase):
     def test_manager_has_company_wide_permissions(self):
         self.assertEqual(get_user_role(self.manager), "MANAGER")
         self.assertTrue(user_has_permission(self.manager, "analytics.view_ceo"))
-        self.assertTrue(user_has_permission(self.manager, "users.delete"))
+        self.assertFalse(user_has_permission(self.manager, "users.delete"))
 
     def test_hr_is_limited_to_hr_scope(self):
         self.assertEqual(get_user_role(self.hr), "HR")
@@ -96,5 +96,14 @@ class RBACRegressionTests(TestCase):
 
     def test_employee_is_self_service_only(self):
         self.assertEqual(get_user_role(self.employee), "EMPLOYEE")
-        self.assertTrue(user_has_permission(self.employee, "expenses.create"))
+        self.assertFalse(user_has_permission(self.employee, "expenses.create"))
         self.assertFalse(user_has_permission(self.employee, "users.view"))
+
+    def test_user_without_role_defaults_to_employee(self):
+        no_role_user = User.objects.create_user(
+            username="norole",
+            email="norole@example.com",
+            password="pass12345",
+            company=self.company,
+        )
+        self.assertEqual(get_user_role(no_role_user), "EMPLOYEE")

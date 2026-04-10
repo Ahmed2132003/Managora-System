@@ -18,7 +18,7 @@ export function RequireAuth({ children }: PropsWithChildren) {
   }
 
   const primaryRole = resolvePrimaryRole(data);
-  const isAllowed = isPathAllowedForRole(location.pathname, primaryRole);
+  const isAllowed = isPathAllowedForRole(location.pathname, primaryRole, Boolean(data?.user?.is_superuser));
 
   if (!isAllowed) {
     return <Navigate to={getDefaultPathForRole(primaryRole)} replace />;

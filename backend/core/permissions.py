@@ -143,6 +143,59 @@ ROLE_PERMISSION_MAP = {
     ],
 }
 
+ROLE_PERMISSIONS = {
+    "SUPERUSER": ["*"],
+    "MANAGER": ["*"],
+    "HR": ["hr"],
+    "ACCOUNTANT": ["finance"],
+    "EMPLOYEE": ["self"],
+}
+
+PERMISSION_SCOPE_MAP = {
+    "users.": "admin",
+    "audit.": "admin",
+    "hr.": "hr",
+    "employees.": "hr",
+    "attendance.": "hr",
+    "leaves.": "hr",
+    "approvals.": "hr",
+    "commissions.": "hr",
+    "accounting.": "finance",
+    "expenses.": "finance",
+    "invoices.": "finance",
+    "payments.": "finance",
+    "customers.": "finance",
+    "catalog.": "finance",
+    "analytics.view_finance": "finance",
+    "analytics.alerts.": "finance",
+    "export.accounting": "finance",
+    "attendance.self": "self",
+}
+
+
+def _permission_scope(permission_code: str) -> str:
+    exact = PERMISSION_SCOPE_MAP.get(permission_code)
+    if exact:
+        return exact
+
+    for prefix, scope in PERMISSION_SCOPE_MAP.items():
+        if permission_code.startswith(prefix):
+            return scope
+    return "self"
+
+
+def _role_can_access_permission(role: str, permission_code: str) -> bool:
+    if role not in ROLE_PERMISSIONS:
+        raise Exception("Invalid role detected")
+    if role == "SUPERUSER":
+        return True
+
+    scope = _permission_scope(permission_code)
+    allowed = ROLE_PERMISSIONS[role]
+    if "*" in allowed:
+        return scope != "admin"
+    return scope in allowed
+
 
 def _permission_code_matches(granted_code, required_code):
     if granted_code == required_code:
@@ -190,6 +243,10 @@ def user_has_permission(user, required_code):
         return False
     if user.is_superuser:
         return True
+
+    role = get_user_role(user)
+    if not _role_can_access_permission(role, required_code):
+        return False
 
     codes = user_permission_codes(user)
     return any(_permission_code_matches(code, required_code) for code in codes)

@@ -1,10 +1,10 @@
 import type { AppRole } from "./roleNavigation";
 
-const ROLE_ALLOWED_PATHS: Record<Exclude<AppRole, "manager">, Set<string>> = {
+const ROLE_ALLOWED_PATHS: Record<Exclude<AppRole, "manager" | "superuser">, Set<string>> = {
   hr: new Set([
     "/analytics/hr",
     "/users",
-    
+
     "/attendance/self",
     "/employee/self-service",
     "/messages",
@@ -56,14 +56,21 @@ const ROLE_ALLOWED_PATHS: Record<Exclude<AppRole, "manager">, Set<string>> = {
   ]),
 };
 
-export function getAllowedPathsForRole(role: AppRole | null): Set<string> | null {
-  if (!role || role === "manager") {
+export function getAllowedPathsForRole(role: AppRole): Set<string> | null {
+  if (role === "superuser" || role === "manager") {
     return null;
   }
   return ROLE_ALLOWED_PATHS[role];
 }
 
-export function isPathAllowedForRole(pathname: string, role: AppRole | null): boolean {
+export function isPathAllowedForRole(
+  pathname: string,
+  role: AppRole,
+  isSuperuser = false,
+): boolean {
+  if (pathname.startsWith("/admin")) {
+    return isSuperuser;
+  }
   const allowedPaths = getAllowedPathsForRole(role);
   if (!allowedPaths) {
     return true;
