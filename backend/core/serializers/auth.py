@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import logging
+
 from django.contrib.auth import authenticate, get_user_model
 from django.contrib.auth.models import update_last_login
 from django.utils import timezone
@@ -19,9 +21,27 @@ from core.services.two_factor import (
     verify_totp,
 )
 from core.services.abuse import clear_failures, is_ip_blocked, register_failure
+from core.rbac import get_user_role, get_user_roles
+
+
+logger = logging.getLogger(__name__)
 
 class LoginSerializer(TokenObtainPairSerializer):
     """Custom login serializer with defensive error handling."""
+
+    @classmethod
+    def get_token(cls, user):
+        token = super().get_token(user)
+        resolved_role = get_user_role(user)
+        token["role"] = resolved_role
+        token["roles"] = get_user_roles(user)
+        logger.debug(
+            "RBAC_JWT_CLAIMS_BUILT user_id=%s role=%s roles=%s",
+            getattr(user, "id", None),
+            resolved_role,
+            token.get("roles", []),
+        )
+        return token
 
     def validate(self, attrs):
         request = self.context.get("request")
@@ -29,7 +49,7 @@ class LoginSerializer(TokenObtainPairSerializer):
         if is_ip_blocked(ip):
             raise serializers.ValidationError({"detail": "Too many failed login attempts. Try again later."})
 
-        user_model = get_user_model()        
+        user_model = get_user_model()
         username_field = user_model.USERNAME_FIELD
         raw_username = (
             attrs.get(username_field)
@@ -66,7 +86,7 @@ class LoginSerializer(TokenObtainPairSerializer):
             raise serializers.ValidationError(
                 {"detail": "No active account found with the given credentials."},
                 code="authorization",
-            )            
+            )
         if not getattr(user, "is_active", False):
             raise serializers.ValidationError(
                 {"detail": "Account is disabled."},
@@ -91,7 +111,7 @@ class LoginSerializer(TokenObtainPairSerializer):
                 code="authorization",
             )
         clear_failures(ip, kind="login")
-        
+
         if getattr(user, "is_2fa_enabled", False):
             temp_token = issue_login_temp_token(
                 user_id=user.id,
@@ -103,7 +123,25 @@ class LoginSerializer(TokenObtainPairSerializer):
             }
         else:
             refresh = self.get_token(user)
-            data = {"refresh": str(refresh), "access": str(refresh.access_token)}
+            data = {
+                "refresh": str(refresh),
+                "access": str(refresh.access_token),
+                "user": {
+                    "id": user.id,
+                    "email": user.email,
+                    "username": user.username,
+                    "is_superuser": user.is_superuser,
+                },
+                "role": get_user_role(user),
+                "roles": get_user_roles(user),
+            }
+            logger.info(
+                "RBAC_LOGIN_RESPONSE user_id=%s role=%s roles=%s is_superuser=%s",
+                user.id,
+                data["role"],
+                data["roles"],
+                user.is_superuser,
+            )
 
         if api_settings.UPDATE_LAST_LOGIN:
             update_last_login(None, user)
@@ -148,7 +186,20 @@ class TwoFALoginVerifySerializer(serializers.Serializer):
 
         clear_failed_otp_attempts(user_id=user.id)
         refresh = RefreshToken.for_user(user)
+        refresh["role"] = get_user_role(user)
+        refresh["roles"] = get_user_roles(user)
         if api_settings.UPDATE_LAST_LOGIN:
             update_last_login(None, user)
 
-        return {"refresh": str(refresh), "access": str(refresh.access_token)}
+        return {
+            "refresh": str(refresh),
+            "access": str(refresh.access_token),
+            "user": {
+                "id": user.id,
+                "email": user.email,
+                "username": user.username,
+                "is_superuser": user.is_superuser,
+            },
+            "role": get_user_role(user),
+            "roles": get_user_roles(user),
+        }

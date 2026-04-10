@@ -5,13 +5,17 @@ from rest_framework.views import APIView
 from rest_framework import status
 
 from core.permissions import user_permission_codes
+from core.rbac import get_user_role
 from core.serializers.me import MeSerializer
 from core.throttles import ProfileReadWriteThrottle
+import logging
+
+logger = logging.getLogger(__name__)
 
 class MeView(APIView):
     permission_classes = [IsAuthenticated]
     throttle_classes = [ProfileReadWriteThrottle]
-    
+
     @extend_schema(
         tags=["Auth"],
         summary="Current user profile",
@@ -29,6 +33,7 @@ class MeView(APIView):
             )
 
         roles = user.roles.order_by("name")
+        resolved_role = get_user_role(user)
 
         if user.is_superuser:
             permissions = ["*"]
@@ -40,10 +45,18 @@ class MeView(APIView):
         payload = {
             "user": user,
             "company": company,
+            "role": resolved_role,
             "roles": roles,
             "permissions": list(permissions),
             "employee": employee,
         }
+        logger.info(
+            "RBAC_ME_RESPONSE user_id=%s role=%s roles=%s permissions_count=%s",
+            user.id,
+            resolved_role,
+            list(roles.values_list("name", flat=True)),
+            len(permissions),
+        )
 
         serializer = MeSerializer(payload, context={"request": request})
         return Response(serializer.data)

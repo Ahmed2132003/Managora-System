@@ -1,6 +1,12 @@
+import logging
+
 from rest_framework.permissions import BasePermission
 
 from core.models import Permission
+from core.rbac import get_user_role
+
+
+logger = logging.getLogger(__name__)
 
 
 PERMISSION_DEFINITIONS = {
@@ -26,7 +32,7 @@ PERMISSION_DEFINITIONS = {
     "expenses.approve": "Approve expenses",
     "invoices.*": "Manage invoices",
     "payments.*": "Manage payments",
-    "customers.view": "View customers",    
+    "customers.view": "View customers",
     "customers.create": "Create customers",
     "customers.edit": "Edit customers",
     "catalog.view": "View products/services catalog",
@@ -95,13 +101,13 @@ ROLE_PERMISSION_MAP = {
         "leaves.*",
         "commissions.*",
         "users.view",
-        "hr.departments.*",        
+        "hr.departments.*",
         "hr.job_titles.*",
         "hr.employees.*",
         "hr.documents.*",
         "hr.shifts.*",
         "hr.worksites.*",
-        "hr.payroll.*",        
+        "hr.payroll.*",
         "analytics.view_hr",
         "copilot.attendance_report",
         "copilot.top_late_employees",
@@ -116,7 +122,7 @@ ROLE_PERMISSION_MAP = {
         "invoices.*",
         "payments.*",
         "hr.payroll.*",
-        "customers.view",        
+        "customers.view",
         "customers.create",
         "customers.edit",
         "catalog.view",
@@ -150,6 +156,8 @@ def _permission_code_matches(granted_code, required_code):
 def user_permission_codes(user):
     if not user or not user.is_authenticated:
         return set()
+    if user.is_superuser:
+        return set(PERMISSION_DEFINITIONS.keys())
 
     # 1) Primary source: permissions stored in DB (Role <-> Permission M2M)
     codes = set(
@@ -205,6 +213,15 @@ class HasPermission(BasePermission):
         self.permission_code = permission_code
 
     def has_permission(self, request, view):
+        role = get_user_role(request.user)
+        setattr(request, "_resolved_role", role)
+        logger.debug(
+            "RBAC_PERMISSION_CHECK type=single user_id=%s role=%s code=%s view=%s",
+            getattr(request.user, "id", None),
+            role,
+            self.permission_code,
+            view.__class__.__name__,
+        )
         return user_has_permission(request.user, self.permission_code)
 
 
@@ -215,6 +232,15 @@ class HasAnyPermission(BasePermission):
         self.permission_codes = permission_codes
 
     def has_permission(self, request, view):
+        role = get_user_role(request.user)
+        setattr(request, "_resolved_role", role)
+        logger.debug(
+            "RBAC_PERMISSION_CHECK type=any user_id=%s role=%s codes=%s view=%s",
+            getattr(request.user, "id", None),
+            role,
+            self.permission_codes,
+            view.__class__.__name__,
+        )
         return any(user_has_permission(request.user, code) for code in self.permission_codes)
 
 

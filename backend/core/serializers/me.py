@@ -13,7 +13,7 @@ class UserMiniSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
         fields = ("id", "username", "email", "first_name", "last_name", "is_superuser")
-        
+
 
 class RoleMiniSerializer(serializers.ModelSerializer):
     class Meta:
@@ -24,6 +24,7 @@ class RoleMiniSerializer(serializers.ModelSerializer):
 class MeSerializer(serializers.Serializer):
     user = UserMiniSerializer()
     company = CompanyMiniSerializer()
+    role = serializers.CharField()
     roles = RoleMiniSerializer(many=True)
     permissions = serializers.ListField(child=serializers.CharField())
     employee = serializers.SerializerMethodField()
