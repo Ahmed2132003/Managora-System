@@ -92,12 +92,13 @@ class LoginSerializer(TokenObtainPairSerializer):
                 {"detail": "Account is disabled."},
                 code="authorization",
             )
+        print("LOGIN ROLE:", get_user_role(user), user.is_superuser)
         if getattr(user, "company_id", None) is None:
             raise serializers.ValidationError(
                 {"detail": "User is not linked to a company."},
                 code="authorization",
             )
-
+            
         company = getattr(user, "company", None)
         now = timezone.now()
         if company and company.subscription_expires_at and company.subscription_expires_at <= now:

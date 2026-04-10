@@ -49,5 +49,12 @@ def get_user_role(user) -> str:
     roles = set(get_user_roles(user))
     for role in ROLE_PRIORITY:
         if role in roles:
+            if role == "HR" and getattr(user, "email", "").lower() != "hr@company.com":
+                logger.warning(
+                    "Suspicious role overwrite detected user_id=%s email=%s roles=%s",
+                    getattr(user, "id", None),
+                    getattr(user, "email", ""),
+                    sorted(roles),
+                )
             return role
     return "EMPLOYEE"

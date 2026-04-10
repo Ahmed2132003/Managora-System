@@ -24,7 +24,9 @@ class MeView(APIView):
     )
     def get(self, request):
         user = request.user
+        print("PROFILE ROLE:", get_user_role(request.user))
         company = getattr(user, "company", None)
+
 
         if company is None:
             return Response(

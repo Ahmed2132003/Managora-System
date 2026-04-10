@@ -67,8 +67,9 @@ class AuditContextMiddleware(MiddlewareMixin):
     def process_request(self, request):
         clear_audit_context()
         request.request_id = request.META.get("HTTP_X_REQUEST_ID") or str(uuid.uuid4())
+        print("MIDDLEWARE USER:", request.user, getattr(request.user, "role", None))
         
-        user = getattr(request, "user", None)
+        user = getattr(request, "user", None)        
         request.company = None
         if user and getattr(user, "is_authenticated", False):
             # Determine the active company for this request.

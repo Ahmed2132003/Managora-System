@@ -270,8 +270,9 @@ class HasPermission(BasePermission):
         self.permission_code = permission_code
 
     def has_permission(self, request, view):
+        print("PERMISSION ROLE:", get_user_role(request.user))
         role = get_user_role(request.user)
-        setattr(request, "_resolved_role", role)
+        setattr(request, "_resolved_role", role)        
         logger.debug(
             "RBAC_PERMISSION_CHECK type=single user_id=%s role=%s code=%s view=%s",
             getattr(request.user, "id", None),
@@ -289,8 +290,9 @@ class HasAnyPermission(BasePermission):
         self.permission_codes = permission_codes
 
     def has_permission(self, request, view):
+        print("PERMISSION ROLE:", get_user_role(request.user))
         role = get_user_role(request.user)
-        setattr(request, "_resolved_role", role)
+        setattr(request, "_resolved_role", role)        
         logger.debug(
             "RBAC_PERMISSION_CHECK type=any user_id=%s role=%s codes=%s view=%s",
             getattr(request.user, "id", None),
