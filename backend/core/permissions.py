@@ -3,7 +3,7 @@ import logging
 from rest_framework.permissions import BasePermission
 
 from core.models import Permission
-from core.rbac import get_user_role
+from core.rbac import ACCESS_MATRIX, get_user_role
 
 
 logger = logging.getLogger(__name__)
@@ -143,13 +143,7 @@ ROLE_PERMISSION_MAP = {
     ],
 }
 
-ROLE_PERMISSIONS = {
-    "SUPERUSER": ["*"],
-    "MANAGER": ["*"],
-    "HR": ["hr"],
-    "ACCOUNTANT": ["finance"],
-    "EMPLOYEE": ["self"],
-}
+ROLE_PERMISSIONS = ACCESS_MATRIX
 
 PERMISSION_SCOPE_MAP = {
     "users.": "admin",
@@ -305,9 +299,11 @@ class HasAnyPermission(BasePermission):
 
 class PermissionByActionMixin:
     permission_map = {}
+    permission_scope = None
 
     def get_permissions(self):
         permissions = [permission() for permission in self.permission_classes]
+        permissions.append(RoleBasedPermission())
         permission_code = self.permission_map.get(getattr(self, "action", None))
         if permission_code:
             if isinstance(permission_code, (list, tuple, set)):
@@ -315,3 +311,59 @@ class PermissionByActionMixin:
             else:
                 permissions.append(HasPermission(permission_code))
         return permissions
+
+
+class SafePermission(BasePermission):
+    """
+    Emergency lock-down permission.
+    Keep available for critical incidents where full deny is required.
+    """
+
+    def has_permission(self, request, view):
+        return False
+
+
+def get_view_scopes(view) -> set[str]:
+    scopes: set[str] = set()
+    declared_scopes = getattr(view, "permission_scopes", None)
+    if isinstance(declared_scopes, (list, tuple, set)):
+        scopes.update(str(scope) for scope in declared_scopes if scope)
+
+    scope = getattr(view, "permission_scope", None)
+    if scope:
+        scopes.add(scope)
+
+    permission_map = getattr(view, "permission_map", None) or {}
+    action = getattr(view, "action", None)
+    permission_code = permission_map.get(action)
+    if isinstance(permission_code, (list, tuple, set)):
+        permission_code = next(iter(permission_code), None)
+    if permission_code:
+        scopes.add(_permission_scope(permission_code))
+    return scopes
+
+
+class RoleBasedPermission(BasePermission):
+    message = "You do not have permission to access this resource."
+
+    def has_permission(self, request, view):
+        user = getattr(request, "user", None)
+        if not user or not user.is_authenticated:
+            return False
+
+        print("USER:", getattr(user, "id", None))
+        print("ROLE:", getattr(user, "role", None))
+        print("IS_SUPERUSER:", getattr(user, "is_superuser", False))
+
+        role = get_user_role(user)
+        if role not in ACCESS_MATRIX:
+            return False
+
+        allowed_scopes = ACCESS_MATRIX[role]
+        if "*" in allowed_scopes:
+            return True
+
+        requested_scopes = get_view_scopes(view)
+        if not requested_scopes:
+            return False
+        return any(scope in allowed_scopes for scope in requested_scopes)

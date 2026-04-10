@@ -7,6 +7,14 @@ logger = logging.getLogger(__name__)
 VALID_ROLES = {"SUPERUSER", "MANAGER", "HR", "ACCOUNTANT", "EMPLOYEE"}
 ROLE_PRIORITY = ("MANAGER", "HR", "ACCOUNTANT", "EMPLOYEE")
 
+ACCESS_MATRIX = {
+    "SUPERUSER": ["admin", "manager", "hr", "finance", "self"],
+    "MANAGER": ["manager", "hr", "finance", "self"],
+    "HR": ["hr"],
+    "ACCOUNTANT": ["finance"],
+    "EMPLOYEE": ["self"],
+}
+
 
 def _normalize_role_name(value: str | None) -> str | None:
     if not value:
@@ -44,17 +52,18 @@ def get_user_roles(user) -> list[str]:
 def get_user_role(user) -> str:
     if not user or not getattr(user, "is_authenticated", False):
         return "EMPLOYEE"
+
     if getattr(user, "is_superuser", False):
         return "SUPERUSER"
+
+    direct_role = _normalize_role_name(getattr(user, "role", None))
+    if direct_role:
+        if direct_role not in VALID_ROLES:
+            raise Exception("Invalid role detected")
+        return direct_role
+
     roles = set(get_user_roles(user))
     for role in ROLE_PRIORITY:
         if role in roles:
-            if role == "HR" and getattr(user, "email", "").lower() != "hr@company.com":
-                logger.warning(
-                    "Suspicious role overwrite detected user_id=%s email=%s roles=%s",
-                    getattr(user, "id", None),
-                    getattr(user, "email", ""),
-                    sorted(roles),
-                )
             return role
     return "EMPLOYEE"

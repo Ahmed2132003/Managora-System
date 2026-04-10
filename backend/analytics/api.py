@@ -11,6 +11,7 @@ from django.utils.dateparse import parse_date
 from drf_spectacular.utils import extend_schema
 from rest_framework import status
 from rest_framework.response import Response
+from rest_framework.permissions import IsAuthenticated
 from rest_framework.renderers import BaseRenderer, JSONRenderer
 from rest_framework.views import APIView
 
@@ -20,7 +21,7 @@ from analytics.serializers import CashForecastSnapshotSerializer
 from analytics.throttles import AnalyticsRateThrottle
 from core.audit import get_audit_context
 from core.models import ExportLog
-from core.permissions import HasAnyPermission, user_has_permission
+from core.permissions import HasAnyPermission, RoleBasedPermission, user_has_permission
 from core.throttles import ExportRateThrottle
 from core.services.cache_utils import safe_cache_get, safe_cache_set
 
@@ -82,7 +83,8 @@ def _serialize_decimal(value: Decimal | None) -> str | None:
 
 
 class AnalyticsAccessMixin:
-    permission_classes = []
+    permission_classes = [IsAuthenticated, RoleBasedPermission]
+    permission_scopes = ["hr", "finance", "manager"]
 
     def get_permissions(self):
         return [
@@ -353,7 +355,8 @@ class AnalyticsCompareView(AnalyticsAccessMixin, APIView):
 
 
 class CashForecastView(APIView):
-    permission_classes = []
+    permission_classes = [IsAuthenticated, RoleBasedPermission]
+    permission_scope = "finance"
     throttle_classes = [AnalyticsRateThrottle]
     
     def get_permissions(self):

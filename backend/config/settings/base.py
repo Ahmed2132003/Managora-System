@@ -141,7 +141,8 @@ REST_FRAMEWORK = {
     # مهم: نخلي الافتراضي محمي، ونفتح اللي لازم AllowAny
     "DEFAULT_PERMISSION_CLASSES": (
         "rest_framework.permissions.IsAuthenticated",
-    ),
+        "core.permissions.RoleBasedPermission",
+    ),    
     "DEFAULT_PAGINATION_CLASS": "core.pagination.OptionalPagination",
     "PAGE_SIZE": 20,
     "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",

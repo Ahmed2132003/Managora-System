@@ -5,6 +5,8 @@ from django.shortcuts import get_object_or_404
 from rest_framework.exceptions import NotAuthenticated
 from rest_framework.viewsets import ModelViewSet
 
+from core.permissions import RoleBasedPermission
+
 
 class CompanyScopedQuerySet(models.QuerySet):
     def for_company(self, company):
@@ -60,6 +62,12 @@ class CompanyScopedViewSet(ModelViewSet):
             return None
         return request.user.company
 
+    def get_permissions(self):
+        permissions = [permission() for permission in self.permission_classes]
+        if not any(isinstance(permission, RoleBasedPermission) for permission in permissions):
+            permissions.append(RoleBasedPermission())
+        return permissions
+    
     def get_queryset(self):
         queryset = super().get_queryset()
         company = self._current_company()
