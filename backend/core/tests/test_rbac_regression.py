@@ -4,7 +4,7 @@ from rest_framework.test import APIClient
 
 from core.models import Company, Role, User, UserRole
 from core.permissions import PERMISSION_DEFINITIONS, user_has_permission
-from core.rbac import get_user_role
+from core.rbac import get_user_role, get_user_roles
 
 
 class RBACRegressionTests(TestCase):
@@ -107,3 +107,7 @@ class RBACRegressionTests(TestCase):
             company=self.company,
         )
         self.assertEqual(get_user_role(no_role_user), "EMPLOYEE")
+
+    def test_get_user_roles_deduplicates_role_names(self):
+        UserRole.objects.get_or_create(user=self.manager, role=self.manager_role)
+        self.assertEqual(get_user_roles(self.manager), ["MANAGER"])

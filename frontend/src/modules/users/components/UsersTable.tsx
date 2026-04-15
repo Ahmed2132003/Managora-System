@@ -5,7 +5,8 @@ type UsersTableProps = {
   users: User[];
   isLoading: boolean;
   isError: boolean;
-  isArabic: boolean;
+  isForbidden: boolean;
+  isArabic: boolean;  
   canEdit: boolean;
   canDelete: boolean;
   onEdit: (user: User) => void;
@@ -17,7 +18,8 @@ export function UsersTable({
   users,
   isLoading,
   isError,
-  isArabic,
+  isForbidden,
+  isArabic,  
   canEdit,
   canDelete,
   onEdit,
@@ -36,9 +38,11 @@ export function UsersTable({
       {isLoading && <div className="users-state users-state--loading">{content.table.loading}</div>}
       {isError && (
         <div className="users-state users-state--error">
-          {isArabic ? "حصل خطأ أثناء تحميل المستخدمين." : "Something went wrong while loading users."}
+          {isForbidden
+            ? (isArabic ? "غير مصرح لك بعرض المستخدمين." : "Unauthorized to view users.")
+            : (isArabic ? "حصل خطأ أثناء تحميل المستخدمين." : "Something went wrong while loading users.")}
         </div>
-      )}
+      )}      
       {!isLoading && users.length === 0 && (
         <div className="users-state">
           <strong>{content.table.emptyTitle}</strong>

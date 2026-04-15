@@ -18,8 +18,9 @@ class UsersPermissionsApiTests(APITestCase):
         # users
         self.manager = User.objects.create_user(username="manager", password="pass12345", company=self.c1)
         self.hr = User.objects.create_user(username="hr", password="pass12345", company=self.c1)
+        self.accountant = User.objects.create_user(username="accountant", password="pass12345", company=self.c1)
         self.other_company_user = User.objects.create_user(username="x", password="pass12345", company=self.c2)
-
+        
         # roles
         self.manager_role, _ = Role.objects.get_or_create(company=self.c1, name="Manager")
         self.hr_role, _ = Role.objects.get_or_create(company=self.c1, name="HR")
@@ -27,7 +28,8 @@ class UsersPermissionsApiTests(APITestCase):
         self.employee_role, _ = Role.objects.get_or_create(company=self.c1, name="Employee")
         UserRole.objects.get_or_create(user=self.manager, role=self.manager_role)
         UserRole.objects.get_or_create(user=self.hr, role=self.hr_role)
-        
+        UserRole.objects.get_or_create(user=self.accountant, role=self.accountant_role)
+                
         # permissions rows
         self.p_view = create_permission(code="users.view", name="View users")
         self.p_create = create_permission(code="users.create", name="Create users")
@@ -115,3 +117,9 @@ class UsersPermissionsApiTests(APITestCase):
         url = reverse("user-assign-roles", kwargs={"pk": self.hr.id})
         res = self.client.post(url, {"role_ids": [other_role.id]}, format="json")
         self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_accountant_cannot_list_users(self):
+        self.auth("accountant")
+        url = reverse("user-list")
+        res = self.client.get(url)
+        self.assertEqual(res.status_code, status.HTTP_403_FORBIDDEN)

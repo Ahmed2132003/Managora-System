@@ -42,6 +42,12 @@ export function isUnauthorized(err: unknown): boolean {
   return status === 401;
 }
 
+export function isForbidden(err: unknown): boolean {
+  const maybe = err as { response?: { status?: number }; status?: number };
+  const status = maybe?.response?.status ?? maybe?.status;
+  return status === 403;
+}
+
 export async function fetchRoles(): Promise<Role[]> {
   const res = await http.get<Role[]>(endpoints.roles);
   return res.data;

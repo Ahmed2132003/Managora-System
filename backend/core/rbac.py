@@ -35,8 +35,14 @@ def get_user_roles(user) -> list[str]:
         return ["SUPERUSER"]
 
     role_names = [_normalize_role_name(name) for name in user.roles.values_list("name", flat=True)]
-    roles = [name for name in role_names if name]
-
+    roles: list[str] = []
+    seen: set[str] = set()
+    for name in role_names:
+        if not name or name in seen:
+            continue
+        seen.add(name)
+        roles.append(name)
+        
     for role in roles:
         if role not in VALID_ROLES:
             raise Exception("Invalid role detected")

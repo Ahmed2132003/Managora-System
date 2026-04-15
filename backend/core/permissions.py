@@ -146,7 +146,11 @@ ROLE_PERMISSION_MAP = {
 ROLE_PERMISSIONS = ACCESS_MATRIX
 
 PERMISSION_SCOPE_MAP = {
-    "users.": "admin",
+    # Users management is an HR-scope capability:
+    # - Manager can access via ACCESS_MATRIX["MANAGER"] containing "hr"
+    # - HR can access read/create according to action-level permission codes
+    # - Accountant/Employee remain blocked by scope gate
+    "users.": "hr",    
     "audit.": "admin",
     "hr.": "hr",
     "employees.": "hr",
@@ -266,15 +270,21 @@ class HasPermission(BasePermission):
     def has_permission(self, request, view):
         role = get_user_role(request.user)
         setattr(request, "_resolved_role", role)        
+        has_auth_view_user = False
+        try:
+            has_auth_view_user = bool(request.user.has_perm("auth.view_user"))
+        except Exception:
+            has_auth_view_user = False
         logger.debug(
-            "RBAC_PERMISSION_CHECK type=single user_id=%s role=%s code=%s view=%s",
+            "RBAC_PERMISSION_CHECK type=single user_id=%s role=%s code=%s view=%s django_auth_view_user=%s",
             getattr(request.user, "id", None),
             role,
             self.permission_code,
             view.__class__.__name__,
+            has_auth_view_user,
         )
         return user_has_permission(request.user, self.permission_code)
-
+    
 
 class HasAnyPermission(BasePermission):
     message = "You do not have permission to perform this action."

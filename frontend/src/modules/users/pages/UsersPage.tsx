@@ -28,7 +28,8 @@ import {
   fetchRoles,
   fetchUsers,
   formatApiError,
-  isUnauthorized,
+  isForbidden,
+  isUnauthorized,  
   updateUser,
 } from "../services/usersApi";
 import {
@@ -380,9 +381,10 @@ export function UsersPage() {
             users={users}
             isLoading={usersQuery.isLoading}
             isError={usersQuery.isError}
+            isForbidden={isForbidden(usersQuery.error)}
             isArabic={isArabic}
             canEdit={canEdit}
-            canDelete={canDelete}
+            canDelete={canDelete}            
             onEdit={openEdit}
             onDelete={handleDelete}
           />
