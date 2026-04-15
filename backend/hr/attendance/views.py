@@ -24,6 +24,7 @@ from hr.attendance.serializers import (
     AttendanceSelfRequestOtpSerializer,
     AttendanceSelfVerifyOtpSerializer,
 )
+from hr.attendance.permissions import CanUseAttendanceSelfService
 from hr.attendance.services import (
     approve_attendance,
     get_attendance_queryset,
@@ -56,8 +57,9 @@ def _parse_date_param(value, label):
     partial_update=extend_schema(tags=["Attendance"], summary="Partially update attendance record"),
     destroy=extend_schema(tags=["Attendance"], summary="Delete attendance record"),
 )
-class AttendanceViewSet(ThrottledInitialMixin, PermissionByActionMixin, CompanyScopedViewSet):        
+class AttendanceViewSet(ThrottledInitialMixin, PermissionByActionMixin, CompanyScopedViewSet):
     serializer_class = AttendanceRecordSerializer
+    permission_scopes = ["self"]
     permission_classes = [IsAuthenticated]
     # Use higher read capacity for dashboard/profile queries while preserving write protection.
     throttle_classes = [AttendanceReadWriteThrottle]     
@@ -114,7 +116,12 @@ class AttendanceViewSet(ThrottledInitialMixin, PermissionByActionMixin, CompanyS
         request=AttendanceActionSerializer,
         responses={201: AttendanceRecordSerializer},
     )
-    @action(detail=False, methods=["post"], url_path="check-in")
+    @action(
+        detail=False,
+        methods=["post"],
+        permission_classes=[IsAuthenticated, CanUseAttendanceSelfService],
+        url_path="check-in",
+    )
     def check_in(self, request):
         serializer = AttendanceActionSerializer(data=request.data, context={"request": request})        
         serializer.is_valid(raise_exception=True)
@@ -130,7 +137,12 @@ class AttendanceViewSet(ThrottledInitialMixin, PermissionByActionMixin, CompanyS
         request=AttendanceActionSerializer,
         responses={200: AttendanceRecordSerializer},
     )
-    @action(detail=False, methods=["post"], url_path="check-out")
+    @action(
+        detail=False,
+        methods=["post"],
+        permission_classes=[IsAuthenticated, CanUseAttendanceSelfService],
+        url_path="check-out",
+    )
     def check_out(self, request):
         serializer = AttendanceActionSerializer(data=request.data, context={"request": request})
         serializer.is_valid(raise_exception=True)
@@ -154,7 +166,12 @@ class AttendanceViewSet(ThrottledInitialMixin, PermissionByActionMixin, CompanyS
         request=AttendanceSelfRequestOtpSerializer,
         responses={201: dict},
     )
-    @action(detail=False, methods=["post"], permission_classes=[IsAuthenticated], url_path="request-otp")
+    @action(
+        detail=False,
+        methods=["post"],
+        permission_classes=[IsAuthenticated, CanUseAttendanceSelfService],
+        url_path="request-otp",
+    )
     def request_otp(self, request):
         serializer = AttendanceSelfRequestOtpSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -167,7 +184,12 @@ class AttendanceViewSet(ThrottledInitialMixin, PermissionByActionMixin, CompanyS
         request=AttendanceSelfVerifyOtpSerializer,
         responses={201: AttendanceRecordSerializer},
     )
-    @action(detail=False, methods=["post"], permission_classes=[IsAuthenticated], url_path="verify-otp")
+    @action(
+        detail=False,
+        methods=["post"],
+        permission_classes=[IsAuthenticated, CanUseAttendanceSelfService],
+        url_path="verify-otp",
+    )
     def verify_otp(self, request):
         serializer = AttendanceSelfVerifyOtpSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
