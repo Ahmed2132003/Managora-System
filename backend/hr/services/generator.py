@@ -36,6 +36,7 @@ def _resolve_daily_rate(salary_structure: SalaryStructure) -> Decimal | None:
         return None
     return salary_structure.basic_salary / WORKING_DAYS_PER_MONTH
 
+
 def _month_date_range(year, month):
     last_day = monthrange(year, month)[1]
     start_date = date(year, month, 1)
@@ -69,6 +70,20 @@ def _salary_type_matches_period(*, salary_type: str, period_type: str) -> bool:
     return False
 
 
+def _eligible_employees_for_period(*, company, end_date):
+    """Employees eligible for payroll generation for the period end date."""
+    return (
+        Employee.objects.filter(
+            company=company,
+            status__iexact=Employee.Status.ACTIVE,
+            hire_date__lte=end_date,
+            salary_structure__isnull=False,
+        )
+        .select_related("salary_structure")
+        .distinct()
+    )
+
+
 def generate_period(company, year=None, month=None, actor=None, period=None):
     if period is None:
         if year is None or month is None:
@@ -85,7 +100,7 @@ def generate_period(company, year=None, month=None, actor=None, period=None):
 
     year = period.year
     month = period.month
-    
+
     if period.status == PayrollPeriod.Status.LOCKED:
         raise ValidationError("Payroll period is locked.")
 
@@ -95,14 +110,18 @@ def generate_period(company, year=None, month=None, actor=None, period=None):
         if period.period_type == PayrollPeriod.PeriodType.MONTHLY and year and month:
             start_date, end_date = _month_date_range(year, month)
         else:
-            raise ValidationError("Payroll period start and end dates are required.")        
-    employees = Employee.objects.filter(
-        company=company, status=Employee.Status.ACTIVE
-    ).select_related("salary_structure")
+            raise ValidationError("Payroll period start and end dates are required.")
+
+    employees = _eligible_employees_for_period(company=company, end_date=end_date)
     employee_count = employees.count()
-    
+
+    # Mandatory production-debug traces for payroll empty-runs diagnostics.
+    print("PERIOD:", period.start_date, period.end_date)
+    print("EMPLOYEES COUNT:", employee_count)
+    print("EMP IDS:", list(employees.values_list("id", flat=True)))
+
     summary = {"generated": 0, "skipped": []}
-    
+
     period_type = period.period_type
     logger.info(
         "Starting payroll generation",
@@ -115,11 +134,12 @@ def generate_period(company, year=None, month=None, actor=None, period=None):
             "eligible_employee_count": employee_count,
         },
     )
+
     with transaction.atomic():
-        for employee in employees:            
+        for employee in employees:
             salary_structure = getattr(employee, "salary_structure", None)
             if not salary_structure:
-                summary["skipped"].append(                    
+                summary["skipped"].append(
                     {
                         "employee_id": employee.id,
                         "reason": "Salary structure is missing.",
@@ -129,7 +149,7 @@ def generate_period(company, year=None, month=None, actor=None, period=None):
 
             if not _salary_type_matches_period(
                 salary_type=salary_structure.salary_type,
-                period_type=period_type,                
+                period_type=period_type,
             ):
                 summary["skipped"].append(
                     {
@@ -151,18 +171,18 @@ def generate_period(company, year=None, month=None, actor=None, period=None):
             attendance_count = attendance_qs.count()
             present_days = Decimal(
                 attendance_qs.exclude(status=AttendanceRecord.Status.ABSENT).count()
-            )            
+            )
             absent_days = Decimal(
                 attendance_qs.filter(status=AttendanceRecord.Status.ABSENT).count()
             )
-            
+
             earnings_total = Decimal("0")
             deductions_total = Decimal("0")
             lines = []
 
             attendance_based_salary = salary_structure.salary_type in (
                 SalaryStructure.SalaryType.DAILY,
-                SalaryStructure.SalaryType.WEEKLY,                
+                SalaryStructure.SalaryType.WEEKLY,
             )
             basic_salary_amount = basic_salary
             if attendance_based_salary and daily_rate is not None:
@@ -176,7 +196,7 @@ def generate_period(company, year=None, month=None, actor=None, period=None):
                 if daily_rate is not None:
                     meta["rate"] = str(_quantize_amount(daily_rate))
                 if attendance_based_salary:
-                    meta["attendance_days"] = int(present_days)                    
+                    meta["attendance_days"] = int(present_days)
                 lines.append(
                     PayrollLine(
                         company=company,
@@ -189,7 +209,7 @@ def generate_period(company, year=None, month=None, actor=None, period=None):
                     )
                 )
                 earnings_total += basic_salary_amount
-                                
+
             components = salary_structure.components.filter(
                 Q(payroll_period=period)
                 | (
@@ -202,7 +222,7 @@ def generate_period(company, year=None, month=None, actor=None, period=None):
                         )
                     )
                 )
-            ).exclude(name__startswith="HR action deduction:")                                                                                                        
+            ).exclude(name__startswith="HR action deduction:")
             for component in components:
                 line_type = (
                     PayrollLine.LineType.EARNING
@@ -230,10 +250,10 @@ def generate_period(company, year=None, month=None, actor=None, period=None):
                 attendance_qs.aggregate(total=Sum("late_minutes"))["total"] or 0
             )
 
-            if late_minutes_total and minute_rate is not None:                
+            if late_minutes_total and minute_rate is not None:
                 late_amount = _quantize_amount(
                     minute_rate * Decimal(late_minutes_total)
-                )                
+                )
                 if late_amount > 0:
                     lines.append(
                         PayrollLine(
@@ -267,13 +287,13 @@ def generate_period(company, year=None, month=None, actor=None, period=None):
                             type=PayrollLine.LineType.DEDUCTION,
                             amount=absent_amount,
                             meta={
-                                "days": int(absent_days),                                
+                                "days": int(absent_days),
                                 "rate": str(_quantize_amount(daily_rate)),
                             },
                         )
                     )
                     deductions_total += absent_amount
-                    
+
             unpaid_requests = LeaveRequest.objects.filter(
                 company=company,
                 employee=employee,
@@ -296,7 +316,7 @@ def generate_period(company, year=None, month=None, actor=None, period=None):
                 unpaid_amount = _quantize_amount(daily_rate * unpaid_leave_days)
                 if unpaid_amount > 0:
                     lines.append(
-                        PayrollLine(                            
+                        PayrollLine(
                             company=company,
                             payroll_run=None,
                             code="UNPAID_LEAVE",
@@ -304,7 +324,7 @@ def generate_period(company, year=None, month=None, actor=None, period=None):
                             type=PayrollLine.LineType.DEDUCTION,
                             amount=unpaid_amount,
                             meta={
-                                "days": str(int(unpaid_leave_days)),                                                                                            
+                                "days": str(int(unpaid_leave_days)),
                                 "rate": str(_quantize_amount(daily_rate)),
                             },
                         )
@@ -364,7 +384,7 @@ def generate_period(company, year=None, month=None, actor=None, period=None):
                     )
                 )
                 deductions_total += action.value
-                                    
+
             loans = LoanAdvance.objects.filter(
                 company=company,
                 employee=employee,
@@ -380,7 +400,7 @@ def generate_period(company, year=None, month=None, actor=None, period=None):
                 installment = min(loan.installment_amount, loan.remaining_amount)
                 installment_amount = _quantize_amount(installment)
                 if installment_amount > 0:
-                    lines.append(                        
+                    lines.append(
                         PayrollLine(
                             company=company,
                             payroll_run=None,
@@ -413,12 +433,6 @@ def generate_period(company, year=None, month=None, actor=None, period=None):
                 },
             )
             run.lines.all().delete()
-            
-            for line in lines:
-                line.payroll_run = run
-            PayrollLine.objects.bulk_create(lines)
-
-            summary["generated"] += 1
 
             for line in lines:
                 line.payroll_run = run

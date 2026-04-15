@@ -233,3 +233,38 @@ class PayrollGeneratorTests(TestCase):
         run = PayrollRun.objects.get(period=period, employee=employee)
         self.assertTrue(run.lines.exists())
         self.assertTrue(run.lines.filter(code="BASIC").exists())
+
+    def test_generate_period_filters_by_hire_date_and_requires_salary_structure(self):
+        eligible_employee = self._create_employee_with_structure("EMP-ELIGIBLE")
+        future_employee = self._create_employee_with_structure("EMP-FUTURE")
+        Employee.objects.filter(id=future_employee.id).update(hire_date=date(2026, 8, 1))
+
+        no_structure_employee = Employee.objects.create(
+            company=self.company,
+            employee_code="EMP-NO-STRUCT",
+            full_name="No Structure Employee",
+            hire_date=date(2025, 1, 1),
+            status=Employee.Status.ACTIVE,
+        )
+
+        period = PayrollPeriod.objects.create(
+            company=self.company,
+            period_type=PayrollPeriod.PeriodType.WEEKLY,
+            year=2026,
+            month=7,
+            start_date=date(2026, 7, 20),
+            end_date=date(2026, 7, 26),
+        )
+
+        summary = generate_period(self.company, actor=self.actor, period=period)
+
+        self.assertEqual(summary["generated"], 1)
+        self.assertTrue(
+            PayrollRun.objects.filter(period=period, employee=eligible_employee).exists()
+        )
+        self.assertFalse(
+            PayrollRun.objects.filter(period=period, employee=future_employee).exists()
+        )
+        self.assertFalse(
+            PayrollRun.objects.filter(period=period, employee=no_structure_employee).exists()
+        )
