@@ -264,7 +264,6 @@ class HasPermission(BasePermission):
         self.permission_code = permission_code
 
     def has_permission(self, request, view):
-        print("PERMISSION ROLE:", get_user_role(request.user))
         role = get_user_role(request.user)
         setattr(request, "_resolved_role", role)        
         logger.debug(
@@ -284,7 +283,6 @@ class HasAnyPermission(BasePermission):
         self.permission_codes = permission_codes
 
     def has_permission(self, request, view):
-        print("PERMISSION ROLE:", get_user_role(request.user))
         role = get_user_role(request.user)
         setattr(request, "_resolved_role", role)        
         logger.debug(
@@ -350,10 +348,6 @@ class RoleBasedPermission(BasePermission):
         user = getattr(request, "user", None)
         if not user or not user.is_authenticated:
             return False
-
-        print("USER:", getattr(user, "id", None))
-        print("ROLE:", getattr(user, "role", None))
-        print("IS_SUPERUSER:", getattr(user, "is_superuser", False))
 
         role = get_user_role(user)
         if role not in ACCESS_MATRIX:

@@ -13,6 +13,10 @@ export type MeResponse = {
     last_name: string;
     is_superuser: boolean;
   };  
+  username?: string;
+  role?: string;
+  effective_role?: string | null;
+  extra_permissions?: string[];
   company: {
     id: number;
     name: string;
@@ -48,6 +52,8 @@ export function useMe() {
           endpoint,
           userId: response.data.user?.id,
           companyId: response.data.company?.id,
+          role: response.data.role,
+          effectiveRole: response.data.effective_role,
         });
         return response.data;
       } catch (error) {

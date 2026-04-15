@@ -1,6 +1,11 @@
 from __future__ import annotations
 
 import logging
+from functools import wraps
+from typing import Callable, Iterable
+
+from django.core.exceptions import PermissionDenied
+from rest_framework.permissions import BasePermission
 
 logger = logging.getLogger(__name__)
 
@@ -10,8 +15,8 @@ ROLE_PRIORITY = ("MANAGER", "HR", "ACCOUNTANT", "EMPLOYEE")
 ACCESS_MATRIX = {
     "SUPERUSER": ["admin", "manager", "hr", "finance", "self"],
     "MANAGER": ["manager", "hr", "finance", "self"],
-    "HR": ["hr"],
-    "ACCOUNTANT": ["finance"],
+    "HR": ["hr", "self"],
+    "ACCOUNTANT": ["finance", "self"],
     "EMPLOYEE": ["self"],
 }
 
@@ -29,10 +34,7 @@ def get_user_roles(user) -> list[str]:
     if getattr(user, "is_superuser", False):
         return ["SUPERUSER"]
 
-    role_names = [
-        _normalize_role_name(name)
-        for name in user.roles.values_list("name", flat=True)
-    ]
+    role_names = [_normalize_role_name(name) for name in user.roles.values_list("name", flat=True)]
     roles = [name for name in role_names if name]
 
     for role in roles:
@@ -67,3 +69,50 @@ def get_user_role(user) -> str:
         if role in roles:
             return role
     return "EMPLOYEE"
+
+
+def normalize_role_slug(role: str | None) -> str:
+    resolved = _normalize_role_name(role)
+    if not resolved:
+        return "employee"
+    return resolved.lower()
+
+
+def resolve_role_payload(user) -> dict[str, object]:
+    role = get_user_role(user)
+    role_slug = normalize_role_slug(role)
+    payload: dict[str, object] = {
+        "role": role_slug,
+        "role_scopes": ACCESS_MATRIX.get(role, ["self"]),
+    }
+    if getattr(user, "is_superuser", False):
+        payload["effective_role"] = "manager"
+        payload["extra_permissions"] = ["admin"]
+    return payload
+
+
+def role_required(allowed_roles: Iterable[str]):
+    allowed = {_normalize_role_name(role) for role in allowed_roles if role}
+
+    def decorator(view_func: Callable):
+        @wraps(view_func)
+        def _wrapped(request, *args, **kwargs):
+            user = getattr(request, "user", None)
+            role = get_user_role(user)
+            if role not in allowed:
+                raise PermissionDenied("You do not have permission to access this endpoint.")
+            return view_func(request, *args, **kwargs)
+
+        return _wrapped
+
+    return decorator
+
+
+class RoleRequired(BasePermission):
+    message = "You do not have permission to access this endpoint."
+
+    def __init__(self, allowed_roles: Iterable[str]):
+        self.allowed_roles = {_normalize_role_name(role) for role in allowed_roles if role}
+
+    def has_permission(self, request, view):
+        return get_user_role(request.user) in self.allowed_roles

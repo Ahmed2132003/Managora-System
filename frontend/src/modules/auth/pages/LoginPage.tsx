@@ -6,7 +6,7 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { endpoints } from "../../../shared/api/endpoints";
 import { formatApiError } from "../../../shared/api/errors";
 import { http } from "../../../shared/api/http";
-import { hasAccessToken, setTokens } from "../../../shared/auth/tokens";
+import { hasAccessToken, setStoredRole, setTokens } from "../../../shared/auth/tokens";
 import { BrandSection } from "../components/BrandSection";
 import { HeroPanel } from "../components/HeroPanel";
 import { LoginSidebar } from "../components/LoginSidebar";
@@ -48,6 +48,15 @@ export function LoginPage() {
       }
 
       setTokens({ access, refresh });
+      const resolvedRole = response.data?.role;
+      if (resolvedRole) {
+        setStoredRole(resolvedRole);
+      }
+      console.info("[auth][login] role resolved", {
+        role: resolvedRole,
+        roles: response.data?.roles,
+        isSuperuser: response.data?.user?.is_superuser,
+      });
 
       notifications.show({
         title: isArabic ? "تم تسجيل الدخول" : "Login successful",

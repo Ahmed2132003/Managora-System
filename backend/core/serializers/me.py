@@ -23,8 +23,11 @@ class RoleMiniSerializer(serializers.ModelSerializer):
 
 class MeSerializer(serializers.Serializer):
     user = UserMiniSerializer()
+    username = serializers.CharField()
     company = CompanyMiniSerializer()
     role = serializers.CharField()
+    effective_role = serializers.CharField(required=False, allow_null=True)
+    extra_permissions = serializers.ListField(child=serializers.CharField(), required=False)
     roles = RoleMiniSerializer(many=True)
     permissions = serializers.ListField(child=serializers.CharField())
     employee = serializers.SerializerMethodField()

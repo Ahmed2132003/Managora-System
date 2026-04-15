@@ -9,6 +9,7 @@ from django.utils.deprecation import MiddlewareMixin
 from rest_framework.throttling import BaseThrottle
 from core.audit import clear_audit_context, get_client_ip, set_audit_context
 from core.models import Company
+from core.rbac import get_user_role
 
 logger = logging.getLogger("managora.request")
 
@@ -28,7 +29,7 @@ class GlobalRateLimitMiddleware:
             waits = []
             for throttle in throttle_instances:
                 if not throttle.allow_request(request, None):
-                    print("THROTTLE HIT")
+                    logger.warning("THROTTLE_HIT path=%s method=%s", request.path, request.method)
                     waits.append(throttle.wait())
 
             if waits:
@@ -67,7 +68,6 @@ class AuditContextMiddleware(MiddlewareMixin):
     def process_request(self, request):
         clear_audit_context()
         request.request_id = request.META.get("HTTP_X_REQUEST_ID") or str(uuid.uuid4())
-        print("MIDDLEWARE USER:", request.user, getattr(request.user, "role", None))
         
         user = getattr(request, "user", None)        
         request.company = None
@@ -127,6 +127,18 @@ class RequestLoggingMiddleware(MiddlewareMixin):
                 latency_ms = (time.time() - start) * 1000.0
                 response["X-Request-ID"] = getattr(request, "request_id", "")
                 response["X-Latency-ms"] = f"{latency_ms:.2f}"
+
+            user = getattr(request, "user", None)
+            role = get_user_role(user) if user and getattr(user, "is_authenticated", False) else "ANON"
+            if request.path.startswith("/api/"):
+                logger.info(
+                    "RBAC_API_REQUEST method=%s path=%s status=%s role=%s user_id=%s",
+                    request.method,
+                    request.path,
+                    getattr(response, "status_code", "?"),
+                    role,
+                    getattr(user, "id", None),
+                )
         except Exception:
             # Never break responses because of logging headers
             pass
