@@ -92,7 +92,7 @@ class LoginSerializer(TokenObtainPairSerializer):
                 {"detail": "Account is disabled."},
                 code="authorization",
             )
-        print("LOGIN ROLE:", get_user_role(user), user.is_superuser)
+        logger.info("RBAC_LOGIN_ATTEMPT user_id=%s role=%s is_superuser=%s", user.id, get_user_role(user), user.is_superuser)
         if getattr(user, "company_id", None) is None:
             raise serializers.ValidationError(
                 {"detail": "User is not linked to a company."},
