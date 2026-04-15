@@ -70,18 +70,53 @@ def _salary_type_matches_period(*, salary_type: str, period_type: str) -> bool:
     return False
 
 
+def _employee_has_field(field_name: str) -> bool:
+    return any(field.name == field_name for field in Employee._meta.get_fields())
+
+
+def _employment_start_date_filter(end_date):
+    """
+    Build start-date filter defensively for mixed/legacy schemas.
+    Prefer `hire_date`; support `join_date` when present.
+    """
+    if _employee_has_field("hire_date"):
+        return Q(hire_date__lte=end_date)
+    if _employee_has_field("join_date"):
+        return Q(join_date__lte=end_date)
+    return Q()
+
+
 def _eligible_employees_for_period(*, company, end_date):
-    """Employees eligible for payroll generation for the period end date."""
-    return (
-        Employee.objects.filter(
-            company=company,
-            status__iexact=Employee.Status.ACTIVE,
-            hire_date__lte=end_date,
-            salary_structure__isnull=False,
-        )
-        .select_related("salary_structure")
-        .distinct()
+    """
+    Employees eligible for payroll generation for the period end date.
+
+    Selection rules:
+    - must belong to the same company
+    - active employees only (status=active or is_active=True when available)
+    - must have employment start date <= period end_date
+    - must have a salary structure
+    """
+    qs = Employee.objects.filter(company=company)
+    stage_counts = {"company_scope": qs.count()}
+
+    active_filter = Q(status__iexact=Employee.Status.ACTIVE)
+    if _employee_has_field("is_active"):
+        active_filter |= Q(is_active=True)
+    qs = qs.filter(active_filter)
+    stage_counts["after_active_filter"] = qs.count()
+
+    qs = qs.filter(_employment_start_date_filter(end_date))
+    stage_counts["after_start_date_filter"] = qs.count()
+
+    qs = qs.filter(salary_structure__isnull=False).select_related("salary_structure").distinct()
+    stage_counts["after_salary_structure_filter"] = qs.count()
+
+    logger.info(
+        "Payroll employee eligibility filtering completed",
+        extra={"company_id": company.id, "end_date": str(end_date), **stage_counts},
     )
+
+    return qs
 
 
 def generate_period(company, year=None, month=None, actor=None, period=None):
@@ -137,11 +172,14 @@ def generate_period(company, year=None, month=None, actor=None, period=None):
 
     with transaction.atomic():
         for employee in employees:
-            salary_structure = getattr(employee, "salary_structure", None)
-            if not salary_structure:
+            try:
+                salary_structure = employee.salary_structure
+            except SalaryStructure.DoesNotExist:
+                salary_structure = None
+            if salary_structure is None:
                 summary["skipped"].append(
                     {
-                        "employee_id": employee.id,
+                        "employee_id": employee.id,                        
                         "reason": "Salary structure is missing.",
                     }
                 )
