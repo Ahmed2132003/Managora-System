@@ -33,7 +33,10 @@ import type { AttendancePendingItem } from "../types/attendance.types";
 import {
   useApproveAttendance,
   useAttendance,
+  useManualAttendanceCreate,
   useAttendancePendingApprovals,
+  useRejectAttendance,
+  useRotatingAttendanceCode,
 } from "../hooks/useAttendance";
 import { useAttendanceFilters } from "../hooks/useAttendanceFilters";
 import { contentMap, type Language, type ThemeMode } from "../config/attendanceContent";
@@ -187,15 +190,29 @@ export function AttendancePage() {
   // Approvals  
   const pendingApprovals = useAttendancePendingApprovals();
   const approveReject = useApproveAttendance();
+  const rejectAttendanceMutation = useRejectAttendance();
+  const manualAttendanceCreate = useManualAttendanceCreate();
+  const rotatingCodeQuery = useRotatingAttendanceCode(canManageSchedule);
   const [rejectReason, setRejectReason] = useState("");
+  const [manualEmployeeId, setManualEmployeeId] = useState<string>("");
+  const [manualDate, setManualDate] = useState<string>(() => new Date().toISOString().slice(0, 10));
+  const [manualCheckIn, setManualCheckIn] = useState<string>("09:00");
+  const [manualCheckOut, setManualCheckOut] = useState<string>("");
 
   async function handleApproval(item: AttendancePendingItem, op: "approve" | "reject") {
     try {
-      if (op === "reject") return;
-      await approveReject.mutateAsync({ recordId: item.record_id, action: item.action });
+      if (op === "reject") {
+        await rejectAttendanceMutation.mutateAsync({
+          recordId: item.record_id,
+          action: item.action,
+          reason: rejectReason || undefined,
+        });
+      } else {
+        await approveReject.mutateAsync({ recordId: item.record_id, action: item.action });
+      }
       notifications.show({
         title: op === "approve" ? content.approvals.approvedTitle : content.approvals.rejectedTitle,
-        message: `${item.employee_name} - ${item.action} (${item.date})`,
+        message: `${item.employee_name} - ${item.action} (${item.date})`,        
       });
       setRejectReason("");
       await pendingApprovals.refetch();
@@ -203,6 +220,42 @@ export function AttendancePage() {
       notifications.show({
         title: content.approvals.failedTitle,
         message: getErrorDetail(error, content.approvals.failedMessage),
+        color: "red",
+      });
+    }
+  }
+
+  async function handleCreateManualAttendance() {
+    if (!manualEmployeeId || !manualDate || !manualCheckIn) {
+      notifications.show({
+        title: content.approvals.failedTitle,
+        message: isArabic ? "يرجى اختيار الموظف والتاريخ ووقت الحضور." : "Please select employee, date and check-in time.",
+        color: "red",
+      });
+      return;
+    }
+    const checkInIso = new Date(`${manualDate}T${manualCheckIn}:00`).toISOString();
+    const checkOutIso = manualCheckOut ? new Date(`${manualDate}T${manualCheckOut}:00`).toISOString() : null;
+    try {
+      await manualAttendanceCreate.mutateAsync({
+        employee_id: Number(manualEmployeeId),
+        date: manualDate,
+        check_in_time: checkInIso,
+        check_out_time: checkOutIso,
+      });
+      notifications.show({
+        title: isArabic ? "تم الحفظ" : "Saved",
+        message: isArabic ? "تم إنشاء الحضور اليدوي بنجاح." : "Manual attendance created successfully.",
+      });
+      setManualCheckOut("");
+      await attendanceQuery.refetch();
+    } catch (error: unknown) {
+      notifications.show({
+        title: isArabic ? "فشل إنشاء الحضور" : "Failed to create attendance",
+        message: getErrorDetail(
+          error,
+          isArabic ? "تعذر إنشاء الحضور اليدوي." : "Unable to create manual attendance."
+        ),
         color: "red",
       });
     }
@@ -639,7 +692,7 @@ export function AttendancePage() {
               isLoading={pendingApprovals.isLoading}
               isError={pendingApprovals.isError}
               isArabic={isArabic}
-              isApproving={approveReject.isPending}
+              isApproving={approveReject.isPending || rejectAttendanceMutation.isPending}              
               labels={{
                 empty: content.approvals.empty,
                 employee: content.approvals.employee,
@@ -655,6 +708,113 @@ export function AttendancePage() {
           </section>
 
           <section className="panel hr-attendance-panel">
+            <div className="panel__header">
+              <div>
+                <h2>{isArabic ? "الحضور اليدوي" : "Manual Attendance"}</h2>
+                <p>
+                  {isArabic
+                    ? "إضافة حضور يدوي للموظف بدون GPS (HR/Manager فقط)."
+                    : "Create attendance manually without GPS (HR/Manager only)."}
+                </p>
+              </div>
+            </div>
+            <div className="attendance-filters">
+              <label className="filter-field">
+                {isArabic ? "الموظف" : "Employee"}
+                <select
+                  value={manualEmployeeId}
+                  onChange={(event) => setManualEmployeeId(event.target.value)}
+                  disabled={!canManageSchedule}
+                >
+                  <option value="">{isArabic ? "اختر الموظف" : "Select employee"}</option>
+                  {employeeOptions.map((employee) => (
+                    <option key={employee.value} value={employee.value}>
+                      {employee.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="filter-field">
+                {isArabic ? "التاريخ" : "Date"}
+                <input
+                  type="date"
+                  value={manualDate}
+                  onChange={(event) => setManualDate(event.target.value)}
+                  disabled={!canManageSchedule}
+                />
+              </label>
+              <label className="filter-field">
+                {isArabic ? "وقت الحضور" : "Check-in time"}
+                <input
+                  type="time"
+                  value={manualCheckIn}
+                  onChange={(event) => setManualCheckIn(event.target.value)}
+                  disabled={!canManageSchedule}
+                />
+              </label>
+              <label className="filter-field">
+                {isArabic ? "وقت الانصراف (اختياري)" : "Check-out time (optional)"}
+                <input
+                  type="time"
+                  value={manualCheckOut}
+                  onChange={(event) => setManualCheckOut(event.target.value)}
+                  disabled={!canManageSchedule}
+                />
+              </label>
+            </div>
+            <div style={{ marginTop: 12 }}>
+              <button
+                type="button"
+                className="primary-button"
+                onClick={handleCreateManualAttendance}
+                disabled={!canManageSchedule || manualAttendanceCreate.isPending}
+              >
+                {manualAttendanceCreate.isPending
+                  ? isArabic
+                    ? "جاري الحفظ..."
+                    : "Saving..."
+                  : isArabic
+                    ? "إضافة حضور يدوي"
+                    : "Create manual attendance"}
+              </button>
+            </div>
+          </section>
+
+          <section className="panel hr-attendance-panel">
+            <div className="panel__header">
+              <div>
+                <h2>{isArabic ? "كود الحضور المتغير" : "Rotating attendance code"}</h2>
+                <p>
+                  {isArabic
+                    ? "يتغير الكود كل 30 ثانية. شاركه مع الموظفين لتقديم الحضور المعلّق."
+                    : "Code rotates every 30 seconds. Share it with employees for pending attendance submissions."}
+                </p>
+              </div>
+              <button type="button" className="ghost-button" onClick={() => rotatingCodeQuery.refetch()}>
+                {isArabic ? "تحديث الكود" : "Refresh code"}
+              </button>
+            </div>
+            <div className="qr-token-card">
+              {rotatingCodeQuery.isLoading ? (
+                <span>{isArabic ? "جاري تحميل الكود..." : "Loading code..."}</span>
+              ) : rotatingCodeQuery.data ? (
+                <>
+                  <strong style={{ fontSize: "2rem", letterSpacing: "0.22em" }}>{rotatingCodeQuery.data.code}</strong>
+                  <div className="qr-token-meta">
+                    <span>
+                      {isArabic ? "ينتهي في" : "Expires at"}:{" "}
+                      {new Date(rotatingCodeQuery.data.expires_at).toLocaleTimeString(isArabic ? "ar" : "en")}
+                    </span>
+                    <span>{isArabic ? "المدة" : "TTL"}: {rotatingCodeQuery.data.ttl_seconds}s</span>
+                  </div>
+                </>
+              ) : (
+                <span>{isArabic ? "لا يوجد كود متاح الآن." : "No active code."}</span>
+              )}
+            </div>
+          </section>
+
+          <section className="panel hr-attendance-panel">          
             <div className="panel__header">
               <div>
                 <h2>{content.scheduleSetup.title}</h2>

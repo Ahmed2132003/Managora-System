@@ -44,8 +44,9 @@ class AttendanceRecord(BaseModel):
         GPS = "gps", "GPS"
         QR = "qr", "QR"
         MANUAL = "manual", "Manual"
+        CODE = "code", "Code"
         EMAIL_OTP = "email_otp", "Email OTP"
-
+        
     class Status(models.TextChoices):
         PRESENT = "present", "Present"
         LATE = "late", "Late"
@@ -107,7 +108,14 @@ class AttendanceRecord(BaseModel):
     late_minutes = models.PositiveIntegerField(default=0)
     early_leave_minutes = models.PositiveIntegerField(default=0)
     notes = models.TextField(null=True, blank=True)
-
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="attendance_created_records",
+    )
+    
     class Meta:
         app_label = "hr"
         constraints = [
@@ -168,3 +176,22 @@ class AttendanceOtpRequest(BaseModel):
 
     def __str__(self) -> str:
         return f"{self.company.name} OTP {self.purpose} for {self.user_id}"
+
+
+class AttendanceCode(BaseModel):
+    code_hash = models.CharField(max_length=128)
+    expires_at = models.DateTimeField()
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="attendance_codes",
+    )
+
+    class Meta:
+        app_label = "hr"
+        indexes = [
+            models.Index(fields=["company", "expires_at"], name="att_code_company_exp_idx"),
+        ]
+
+    def is_expired(self) -> bool:
+        return timezone.now() > self.expires_at

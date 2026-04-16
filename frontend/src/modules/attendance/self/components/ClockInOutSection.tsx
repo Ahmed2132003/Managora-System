@@ -11,9 +11,13 @@ type ClockInOutSectionProps = {
   canVerify: boolean;
   isRequestPending: boolean;
   isVerifyPending: boolean;
+  codeValue: string;
+  isCodeSubmitting: boolean;
   onRequestOtp: (purpose: AttendanceOtpPurpose) => void;
   onOtpCodeChange: (value: string) => void;
   onVerifyOtp: () => void;
+  onCodeChange: (value: string) => void;
+  onSubmitCode: () => void;
 };
 
 export function ClockInOutSection({
@@ -26,10 +30,14 @@ export function ClockInOutSection({
   canVerify,
   isRequestPending,
   isVerifyPending,
+  codeValue,
+  isCodeSubmitting,
   onRequestOtp,
   onOtpCodeChange,
   onVerifyOtp,
-}: ClockInOutSectionProps) {
+  onCodeChange,
+  onSubmitCode,
+}: ClockInOutSectionProps) {  
   return (
     <div className="panel">
       <div className="panel__header">
@@ -93,6 +101,30 @@ export function ClockInOutSection({
             ? "ملاحظة: لا يتم اعتماد الحركة إلا بعد تأكيد الموارد البشرية/المدير."
             : "Note: the record will be approved only after HR/Manager confirmation."}
         </span>
+
+        <hr style={{ width: "100%", borderColor: "var(--border)", opacity: 0.5 }} />
+
+        <div className="attendance-fields">
+          <label className="attendance-field">
+            <span>{isArabic ? "كود الحضور" : "Attendance code"}</span>
+            <input
+              placeholder={isArabic ? "أدخل الكود" : "Enter rotating code"}
+              value={codeValue}
+              onChange={(event) => onCodeChange(event.currentTarget.value.toUpperCase().slice(0, 12))}
+            />
+          </label>
+        </div>
+        <div className="attendance-actions">
+          <button type="button" className="primary-button" onClick={onSubmitCode} disabled={!codeValue || isCodeSubmitting}>
+            {isCodeSubmitting
+              ? isArabic
+                ? "جاري الإرسال..."
+                : "Submitting..."
+              : isArabic
+                ? "إرسال كود الحضور"
+                : "Submit attendance code"}
+          </button>
+        </div>
       </div>
     </div>
   );

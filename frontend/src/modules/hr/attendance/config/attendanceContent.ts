@@ -357,6 +357,8 @@ export const contentMap: Record<Language, Content> = {
       manual: "Manual",
       qr: "QR",
       gps: "GPS",
+      code: "Code",
+      email_otp: "Email OTP",
     },
 
     notifications: {
@@ -565,8 +567,10 @@ export const contentMap: Record<Language, Content> = {
       manual: "يدوي",
       qr: "QR",
       gps: "GPS",
+      code: "كود",
+      email_otp: "OTP البريد",
     },
-
+    
     notifications: {
       qrTitle: "تم إنشاء الكود",
       qrMessage: "تم إنشاء كود QR بنجاح.",

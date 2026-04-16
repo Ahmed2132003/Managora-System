@@ -1,6 +1,11 @@
 import { endpoints } from "../../../../shared/api/endpoints";
 import { http } from "../../../../shared/api/http";
-import type { AttendancePendingItem, AttendanceRecord } from "../types/attendance.types";
+import type {
+  AttendanceCodePayload,
+  AttendancePendingItem,
+  AttendanceRecord,
+  ManualAttendancePayload,
+} from "../types/attendance.types";
 
 function normalizeRows<T>(payload: unknown): T[] {
   if (Array.isArray(payload)) return payload as T[];
@@ -31,5 +36,23 @@ export async function getPendingAttendanceApprovals() {
 
 export async function approveAttendance(recordId: number, action: "checkin" | "checkout") {
   const response = await http.post(endpoints.hr.attendanceApproveReject(recordId, "approve"), { action });
+  return response.data;
+}
+
+export async function rejectAttendance(recordId: number, action: "checkin" | "checkout", reason?: string) {
+  const response = await http.post(endpoints.hr.attendanceApproveReject(recordId, "reject"), {
+    action,
+    reason: reason || null,
+  });
+  return response.data;
+}
+
+export async function createManualAttendance(payload: ManualAttendancePayload) {
+  const response = await http.post<AttendanceRecord>(endpoints.hr.attendanceManualCreate, payload);
+  return response.data;
+}
+
+export async function getRotatingAttendanceCode() {
+  const response = await http.get<AttendanceCodePayload>(endpoints.hr.attendanceCodeGenerate);
   return response.data;
 }

@@ -6,9 +6,10 @@ import { useQueryClient } from "@tanstack/react-query";
 
 import {
   type AttendanceOtpPurpose,
+  useAttendanceCodeSubmitMutation,
   useAttendanceSelfRequestOtpMutation,
   useAttendanceSelfVerifyOtpMutation,
-  useMyAttendanceQuery,
+  useMyAttendanceQuery,  
 } from "../../../../shared/hr/hooks";
 import { useMe } from "../../../../shared/auth/useMe";
 import { clearTokens } from "../../../../shared/auth/tokens";
@@ -83,6 +84,8 @@ export function SelfAttendancePage() {
 
   const requestOtp = useAttendanceSelfRequestOtpMutation();
   const verifyOtp = useAttendanceSelfVerifyOtpMutation();
+  const submitCodeMutation = useAttendanceCodeSubmitMutation();
+  const [attendanceCode, setAttendanceCode] = useState("");
 
   useEffect(() => {
     if (!expiresIn) return;
@@ -159,6 +162,32 @@ export function SelfAttendancePage() {
     content.otpSubmittedMessage,
     content.otpVerifyFailedTitle,
     queryClient,
+  ]);
+
+  const handleSubmitAttendanceCode = useCallback(async () => {
+    if (!attendanceCode.trim()) return;
+    try {
+      await submitCodeMutation.mutateAsync({ code: attendanceCode.trim() });
+      notifications.show({
+        title: content.otpSubmittedTitle,
+        message: content.otpSubmittedMessage,
+      });
+      setAttendanceCode("");
+      await queryClient.invalidateQueries({ queryKey: ["attendance", "my"] });
+    } catch (error: unknown) {
+      notifications.show({
+        title: content.otpVerifyFailedTitle,
+        message: String(getErrorDetail(error)),
+        color: "red",
+      });
+    }
+  }, [
+    attendanceCode,
+    content.otpSubmittedMessage,
+    content.otpSubmittedTitle,
+    content.otpVerifyFailedTitle,
+    queryClient,
+    submitCodeMutation,
   ]);
 
   const navLinks = useMemo(
@@ -348,10 +377,14 @@ export function SelfAttendancePage() {
               canVerify={canVerify}
               isRequestPending={requestOtp.isPending}
               isVerifyPending={verifyOtp.isPending}
+              codeValue={attendanceCode}
+              isCodeSubmitting={submitCodeMutation.isPending}
               onRequestOtp={handleRequestOtp}
               onOtpCodeChange={setOtpCode}
               onVerifyOtp={handleVerifyOtp}
-            />
+              onCodeChange={setAttendanceCode}
+              onSubmitCode={handleSubmitAttendanceCode}
+            />            
           </section>
         </main>
       </div>

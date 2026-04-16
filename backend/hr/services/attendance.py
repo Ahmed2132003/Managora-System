@@ -7,6 +7,7 @@ from typing import Any, Optional
 import logging
 
 from django.core import signing
+from django.db.models import Q
 from django.utils import timezone
 from rest_framework import serializers
 from rest_framework.exceptions import PermissionDenied
@@ -647,3 +648,22 @@ def reject_attendance_action(*, approver, record: AttendanceRecord, action: str,
         record.save()
         return record
     raise serializers.ValidationError({"action": "Invalid action."})
+
+
+def approved_attendance_queryset(queryset):
+    """Payroll-safe attendance filter:
+    include records where check-in is approved (or legacy NULL), and checkout if present is approved.
+    """
+    approved_or_legacy = Q(
+        check_in_approval_status__in=[
+            AttendanceRecord.ApprovalStatus.APPROVED,
+            None,
+        ]
+    )
+    checkout_approved_or_missing = Q(check_out_time__isnull=True) | Q(
+        check_out_approval_status__in=[
+            AttendanceRecord.ApprovalStatus.APPROVED,
+            None,
+        ]
+    )
+    return queryset.filter(approved_or_legacy & checkout_approved_or_missing)

@@ -4,15 +4,17 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime, timedelta
+import secrets
 
 from django.conf import settings
 from django.db import transaction
 from django.db.models import Q, QuerySet
+from django.contrib.auth.hashers import check_password, make_password
 from django.utils import timezone
 from rest_framework.exceptions import PermissionDenied, ValidationError
 
 from core.permissions import user_has_permission
-from hr.models import AttendanceRecord, Employee
+from hr.models import AttendanceCode, AttendanceRecord, Employee
 from hr.services.attendance import (
     approve_attendance_action,
     check_in as attendance_check_in,
@@ -24,6 +26,7 @@ from hr.services.attendance import (
 
 
 APPROVAL_MANAGER_PERMISSION_CODES = ("attendance.*", "approvals.*")
+MANAGE_ATTENDANCE_PERMISSION_CODES = ("attendance.*", "approvals.*")
 
 
 @dataclass(frozen=True)
@@ -227,6 +230,12 @@ def ensure_can_manage_approval(user, attendance: AttendanceRecord) -> None:
     raise PermissionDenied("You do not have permission to approve this request.")
 
 
+def ensure_can_manage_attendance(user) -> None:
+    if any(user_has_permission(user, code) for code in MANAGE_ATTENDANCE_PERMISSION_CODES):
+        return
+    raise PermissionDenied("You do not have permission to manage attendance.")
+
+
 def build_pending_attendance_items(record: AttendanceRecord) -> list[dict]:
     items = []
     if (
@@ -278,6 +287,135 @@ def get_email_config_payload() -> dict:
         "sender_email": sender_email,
         "is_active": True,
     }
+
+
+def _resolve_approved_status_for_record(record: AttendanceRecord) -> str:
+    if record.check_in_approval_status == AttendanceRecord.ApprovalStatus.REJECTED:
+        return AttendanceRecord.Status.ABSENT
+    return record.status
+
+
+@transaction.atomic
+def create_manual_attendance(*, actor, payload: dict) -> AttendanceRecord:
+    ensure_can_manage_attendance(actor)
+    employee = payload["employee"]
+    attendance_date = payload["date"]
+    check_in = payload["check_in_time"]
+    check_out = payload.get("check_out_time")
+
+    existing = AttendanceRecord.objects.filter(
+        company=actor.company,
+        employee=employee,
+        date=attendance_date,
+    ).first()
+    if existing:
+        raise ValidationError({"date": "Attendance already exists for this employee and date."})
+
+    if check_out and check_out < check_in:
+        raise ValidationError({"check_out_time": "check_out_time must be after check_in_time."})
+
+    status = AttendanceRecord.Status.PRESENT
+    if check_out is None:
+        status = AttendanceRecord.Status.INCOMPLETE
+
+    record = AttendanceRecord.objects.create(
+        company=actor.company,
+        employee=employee,
+        date=attendance_date,
+        check_in_time=check_in,
+        check_out_time=check_out,
+        method=AttendanceRecord.Method.MANUAL,
+        status=status,
+        created_by=actor,
+        check_in_approval_status=AttendanceRecord.ApprovalStatus.APPROVED,
+        check_out_approval_status=(
+            AttendanceRecord.ApprovalStatus.APPROVED if check_out else None
+        ),
+        check_in_approved_by=actor,
+        check_out_approved_by=actor if check_out else None,
+        check_in_approved_at=timezone.now(),
+        check_out_approved_at=timezone.now() if check_out else None,
+    )
+    return record
+
+
+def generate_rotating_attendance_code(*, actor) -> dict:
+    ensure_can_manage_attendance(actor)
+    raw_code = "".join(secrets.choice("ABCDEFGHJKLMNPQRSTUVWXYZ23456789") for _ in range(6))
+    expires_at = timezone.now() + timedelta(seconds=30)
+    AttendanceCode.objects.create(
+        company=actor.company,
+        code_hash=make_password(raw_code),
+        expires_at=expires_at,
+        created_by=actor,
+    )
+    return {
+        "code": raw_code,
+        "expires_at": expires_at,
+        "ttl_seconds": 30,
+    }
+
+
+@transaction.atomic
+def submit_code_attendance(*, actor, code: str) -> AttendanceRecord:
+    employee = getattr(actor, "employee_profile", None)
+    if not employee or employee.company_id != actor.company_id or employee.is_deleted:
+        raise ValidationError({"employee": "Employee profile is required for code attendance."})
+
+    now = timezone.now()
+    active_codes = AttendanceCode.objects.filter(
+        company=actor.company,
+        expires_at__gte=now,
+    ).order_by("-created_at")
+
+    matched_code = None
+    for code_record in active_codes:
+        if check_password(code, code_record.code_hash):
+            matched_code = code_record
+            break
+    if not matched_code:
+        raise ValidationError({"code": "Invalid or expired attendance code."})
+
+    record_date = timezone.localdate(now)
+    existing = AttendanceRecord.objects.filter(
+        company=actor.company,
+        employee=employee,
+        date=record_date,
+    ).first()
+    if existing and existing.check_in_time:
+        raise ValidationError({"date": "Attendance already exists for this employee and date."})
+
+    if existing is None:
+        return AttendanceRecord.objects.create(
+            company=actor.company,
+            employee=employee,
+            date=record_date,
+            check_in_time=now,
+            method=AttendanceRecord.Method.CODE,
+            status=AttendanceRecord.Status.PRESENT,
+            check_in_approval_status=AttendanceRecord.ApprovalStatus.PENDING,
+        )
+
+    existing.check_in_time = now
+    existing.method = AttendanceRecord.Method.CODE
+    existing.status = _resolve_approved_status_for_record(existing)
+    existing.check_in_approval_status = AttendanceRecord.ApprovalStatus.PENDING
+    existing.check_in_approved_by = None
+    existing.check_in_approved_at = None
+    existing.check_in_rejection_reason = None
+    existing.save(
+        update_fields=[
+            "check_in_time",
+            "method",
+            "status",
+            "check_in_approval_status",
+            "check_in_approved_by",
+            "check_in_approved_at",
+            "check_in_rejection_reason",
+            "updated_at",
+        ]
+    )
+    return existing
     
 
 check_in = attendance_check_in
@@ -287,8 +425,10 @@ verify_self_attendance_otp = verify_self_attendance_otp
 
 __all__ = [
     "approve_attendance",
+    "create_manual_attendance",
+    "generate_rotating_attendance_code",
     "get_attendance_or_404",
-    "get_attendance_queryset",
+    "get_attendance_queryset",    
     "check_in",
     "check_out",
     "get_email_config_payload",
@@ -301,6 +441,7 @@ __all__ = [
     "record_check_out",
     "perform_self_otp_verification",
     "reject_attendance",
+    "submit_code_attendance",
     "request_self_attendance_otp",
     "verify_self_attendance_otp",
 ]

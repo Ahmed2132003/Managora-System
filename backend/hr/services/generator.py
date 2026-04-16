@@ -21,6 +21,7 @@ from hr.models import (
     SalaryComponent,
     SalaryStructure,
 )
+from hr.services.attendance import approved_attendance_queryset
 
 WORKING_DAYS_PER_MONTH = Decimal("30")
 MINUTES_PER_DAY = Decimal("480")
@@ -273,11 +274,11 @@ def generate_period(company, year=None, month=None, actor=None, period=None):
             daily_rate = _resolve_daily_rate(salary_structure)
             minute_rate = (daily_rate / MINUTES_PER_DAY) if daily_rate else None
 
-            attendance_qs = AttendanceRecord.objects.filter(
+            attendance_qs = approved_attendance_queryset(AttendanceRecord.objects.filter(                
                 company=company,
                 employee=employee,
                 date__range=(start_date, end_date),
-            )
+            ))
             attendance_count = attendance_qs.count()
             present_days = Decimal(
                 attendance_qs.exclude(status=AttendanceRecord.Status.ABSENT).count()

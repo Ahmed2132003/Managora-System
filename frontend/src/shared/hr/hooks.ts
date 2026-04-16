@@ -21,18 +21,20 @@ export type AttendanceRecord = {
   check_in_lng: string | null;
   check_out_lat: string | null;
   check_out_lng: string | null;
-  method: "gps" | "qr" | "manual";
+  method: "gps" | "qr" | "manual" | "code" | "email_otp";
+  source?: "GPS" | "MANUAL" | "CODE" | string;
   status: "present" | "late" | "absent" | "early_leave" | "incomplete";
   late_minutes: number;
   early_leave_minutes: number;
   notes: string | null;
+  created_by?: number | null;
 };
 
-export type AttendanceActionPayload = {
+export type AttendanceActionPayload = {  
   employee_id: number;
   shift_id?: number;
   worksite_id?: number | null;
-  method: "gps" | "qr" | "manual";
+  method: "gps" | "qr" | "manual" | "code" | "email_otp";  
   lat?: number | null;
   lng?: number | null;
   qr_token?: string;
@@ -58,6 +60,19 @@ export type AttendancePendingItem = {
   lng: string | null;
   distance_meters: number | null;
   status: string;
+};
+
+export type AttendanceManualPayload = {
+  employee_id: number;
+  date: string;
+  check_in_time: string;
+  check_out_time?: string | null;
+};
+
+export type AttendanceCodeGenerateResponse = {
+  code: string;
+  expires_at: string;
+  ttl_seconds: number;
 };
 
 export function useAttendanceSelfRequestOtpMutation() {
@@ -1480,6 +1495,38 @@ export function useLockPayrollPeriod(periodId: number | null) {
       const response = await http.post<PayrollPeriod>(
         endpoints.hr.payrollPeriodLock(periodId)
       );
+      return response.data;
+    },
+  });
+}
+
+export function useAttendanceManualCreateMutation() {
+  return useMutation({
+    mutationFn: async (payload: AttendanceManualPayload) => {
+      const response = await http.post<AttendanceRecord>(endpoints.hr.attendanceManualCreate, payload);
+      return response.data;
+    },
+  });
+}
+
+export function useAttendanceCodeGenerateQuery(enabled = true) {
+  return useQuery({
+    queryKey: ["attendance", "code", "current"],
+    queryFn: async () => {
+      const response = await http.get<AttendanceCodeGenerateResponse>(endpoints.hr.attendanceCodeGenerate);
+      return response.data;
+    },
+    enabled,
+    staleTime: 15_000,
+    refetchInterval: 30_000,
+    refetchIntervalInBackground: true,
+  });
+}
+
+export function useAttendanceCodeSubmitMutation() {
+  return useMutation({
+    mutationFn: async (payload: { code: string }) => {
+      const response = await http.post<AttendanceRecord>(endpoints.hr.attendanceCodeSubmit, payload);
       return response.data;
     },
   });

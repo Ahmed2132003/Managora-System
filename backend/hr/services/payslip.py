@@ -7,6 +7,7 @@ from reportlab.lib.units import mm
 from reportlab.pdfgen import canvas
 
 from hr.models import AttendanceRecord
+from hr.services.attendance import approved_attendance_queryset
 
 
 def _format_amount(value: Decimal | None) -> str:
@@ -65,11 +66,11 @@ def _build_run_summary(payroll_run, lines):
         return None
     total_days = (period.end_date - period.start_date).days + 1
     total_days = max(total_days, 1)
-    attendance_records = AttendanceRecord.objects.filter(
+    attendance_records = approved_attendance_queryset(AttendanceRecord.objects.filter(        
         company=payroll_run.company,
         employee=payroll_run.employee,
         date__range=(period.start_date, period.end_date),
-    )
+    ))
     present_days = attendance_records.exclude(status=AttendanceRecord.Status.ABSENT).count()
     absent_days = max(total_days - present_days, 0)
     late_minutes = (

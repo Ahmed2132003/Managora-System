@@ -18,16 +18,21 @@ from hr.models import AttendanceRecord
 from hr.attendance.serializers import (
     AttendanceActionSerializer,
     AttendanceApprovalDecisionSerializer,
+    AttendanceCodeGenerateSerializer,
+    AttendanceCodeSubmitSerializer,
     AttendanceEmailConfigSerializer,
     AttendancePendingItemSerializer,
     AttendanceRecordSerializer,
     AttendanceSelfRequestOtpSerializer,
     AttendanceSelfVerifyOtpSerializer,
+    ManualAttendanceCreateSerializer,
 )
 from hr.attendance.permissions import CanUseAttendanceSelfService
 from hr.attendance.services import (
     approve_attendance,
-    get_attendance_queryset,
+    create_manual_attendance,
+    generate_rotating_attendance_code,
+    get_attendance_queryset,    
     get_email_config_payload,
     get_my_attendance_queryset,
     get_pending_approval_items,
@@ -37,6 +42,7 @@ from hr.attendance.services import (
     perform_self_otp_verification,
     reject_attendance,
     request_self_attendance_otp,
+    submit_code_attendance,
 )
 from hr.api_views import ShiftViewSet, WorkSiteViewSet
 
@@ -71,7 +77,9 @@ class AttendanceViewSet(ThrottledInitialMixin, PermissionByActionMixin, CompanyS
         "pending": ["attendance.*", "approvals.*"],
         "approve": ["attendance.*", "approvals.*"],
         "reject": ["attendance.*", "approvals.*"],
-    }    
+        "manual": ["attendance.*", "approvals.*"],
+        "code": ["attendance.*", "approvals.*"],
+    }        
     http_method_names = ["get", "post", "patch", "delete", "head", "options"]
     queryset = AttendanceRecord.objects.all()
 
@@ -229,6 +237,43 @@ class AttendanceViewSet(ThrottledInitialMixin, PermissionByActionMixin, CompanyS
 
     @extend_schema(
         tags=["Attendance"],
+        summary="Create manual attendance (HR/Manager only)",
+        request=ManualAttendanceCreateSerializer,
+        responses={201: AttendanceRecordSerializer},
+    )
+    @action(detail=False, methods=["post"], url_path="manual")
+    def manual(self, request):
+        serializer = ManualAttendanceCreateSerializer(data=request.data, context={"request": request})
+        serializer.is_valid(raise_exception=True)
+        attendance = create_manual_attendance(actor=request.user, payload=serializer.validated_data)
+        return Response(AttendanceRecordSerializer(attendance).data, status=status.HTTP_201_CREATED)
+
+    @extend_schema(
+        tags=["Attendance"],
+        summary="Generate a rotating attendance code (HR/Manager only)",
+        request=None,
+        responses={200: AttendanceCodeGenerateSerializer},
+    )
+    @action(detail=False, methods=["get"], url_path="code")
+    def code(self, request):
+        payload = generate_rotating_attendance_code(actor=request.user)
+        return Response(payload, status=status.HTTP_200_OK)
+
+    @extend_schema(
+        tags=["Attendance"],
+        summary="Submit attendance code (employee)",
+        request=AttendanceCodeSubmitSerializer,
+        responses={201: AttendanceRecordSerializer},
+    )
+    @action(detail=False, methods=["post"], url_path="code/submit")
+    def submit_code(self, request):
+        serializer = AttendanceCodeSubmitSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        attendance = submit_code_attendance(actor=request.user, code=serializer.validated_data["code"])
+        return Response(AttendanceRecordSerializer(attendance).data, status=status.HTTP_201_CREATED)
+    
+    @extend_schema(
+        tags=["Attendance"],
         summary="Approve a pending attendance action",
         request=AttendanceApprovalDecisionSerializer,
         responses={200: AttendanceRecordSerializer},
@@ -237,13 +282,14 @@ class AttendanceViewSet(ThrottledInitialMixin, PermissionByActionMixin, CompanyS
     def approve(self, request, pk=None):
         serializer = AttendanceApprovalDecisionSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
+        action = serializer.validated_data.get("action") or "checkin"
         attendance = approve_attendance(
             attendance=self.get_object(),
             approved_by=request.user,
-            approval_action=serializer.validated_data["action"],
+            approval_action=action,
         )
         return Response(AttendanceRecordSerializer(attendance).data)
-
+    
     @extend_schema(
         tags=["Attendance"],
         summary="Reject a pending attendance action",
@@ -254,13 +300,14 @@ class AttendanceViewSet(ThrottledInitialMixin, PermissionByActionMixin, CompanyS
     def reject(self, request, pk=None):
         serializer = AttendanceApprovalDecisionSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
+        action = serializer.validated_data.get("action") or "checkin"
         attendance = reject_attendance(
             attendance=self.get_object(),
             rejected_by=request.user,
-            approval_action=serializer.validated_data["action"],
+            approval_action=action,
             reason=serializer.validated_data.get("reason"),
         )
         return Response(AttendanceRecordSerializer(attendance).data)
-
+    
 
 __all__ = ["AttendanceViewSet", "ShiftViewSet", "WorkSiteViewSet"]

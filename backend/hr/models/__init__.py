@@ -21,6 +21,7 @@ from hr.documents.models import (
     employee_document_upload_to,
 )
 from hr.attendance.models import (
+    AttendanceCode,
     AttendanceOtpRequest,
     AttendanceRecord,
     Shift,
@@ -49,6 +50,7 @@ from hr.payroll.models import (
 __all__ = [
     "AttendanceOtpRequest",
     "AttendanceRecord",
+    "AttendanceCode",    
     "BaseModel",
     "CommissionRequest",
     "CompanyScopedModel",    

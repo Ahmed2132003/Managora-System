@@ -1,5 +1,12 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { approveAttendance, getAttendance, getPendingAttendanceApprovals } from "../services/attendance.api";
+import {
+  approveAttendance,
+  createManualAttendance,
+  getAttendance,
+  getPendingAttendanceApprovals,
+  getRotatingAttendanceCode,
+  rejectAttendance,
+} from "../services/attendance.api";
 
 export function useAttendance(filters: { search: string; dateFrom: string; dateTo: string }) {
   return useQuery({
@@ -23,5 +30,37 @@ export function useApproveAttendance() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["attendance"] });
     },
+  });
+}
+
+export function useRejectAttendance() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (payload: { recordId: number; action: "checkin" | "checkout"; reason?: string }) =>
+      rejectAttendance(payload.recordId, payload.action, payload.reason),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["attendance"] });
+    },
+  });
+}
+
+export function useManualAttendanceCreate() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: createManualAttendance,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["attendance"] });
+    },
+  });
+}
+
+export function useRotatingAttendanceCode(enabled: boolean) {
+  return useQuery({
+    queryKey: ["attendance", "rotating-code"],
+    queryFn: getRotatingAttendanceCode,
+    enabled,
+    refetchInterval: 30_000,
+    refetchIntervalInBackground: true,
+    staleTime: 15_000,
   });
 }

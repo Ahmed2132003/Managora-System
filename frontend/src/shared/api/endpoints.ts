@@ -78,7 +78,10 @@ export const endpoints = {
     attendanceMy: api("/attendance/mine/"),
     attendanceSelfRequestOtp: api("/attendance/request-otp/"),
     attendanceSelfVerifyOtp: api("/attendance/verify-otp/"),
-    attendanceEmailConfig: api("/attendance/email-config/"),
+    attendanceManualCreate: api("/attendance/manual/"),
+    attendanceCodeGenerate: api("/attendance/code/"),
+    attendanceCodeSubmit: api("/attendance/code/submit/"),
+    attendanceEmailConfig: api("/attendance/email-config/"),    
     attendancePendingApprovals: api("/attendance/pending/"),    
     attendanceApproveReject: (recordId: number, action: "approve" | "reject") =>
       api(`/attendance/${recordId}/${action}/`),
