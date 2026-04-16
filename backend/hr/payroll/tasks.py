@@ -22,6 +22,7 @@ def generate_payroll_period(self, period_id: int, user_id: int) -> dict:
     User = get_user_model()
 
     try:
+        print(f"Generating payroll for period {period_id}")
         with transaction.atomic():
             period = PayrollPeriod.objects.select_related("company").get(id=period_id)
             user = User.objects.get(id=user_id)
@@ -30,12 +31,17 @@ def generate_payroll_period(self, period_id: int, user_id: int) -> dict:
             )
 
         summary = generate_period(company=period.company, actor=user, period=period)
+        print(
+            f"Payroll generation finished for period {period_id}. "
+            f"Generated={summary.get('generated', 0)} "
+            f"Skipped={len(summary.get('skipped', []))}"
+        )
         PayrollTaskRun.objects.filter(task_id=self.request.id).update(
             status=PayrollTaskRun.Status.SUCCESS,
             result=summary,
             error="",
         )
-
+        
         notify_user(
             user,
             message=NotificationMessage(

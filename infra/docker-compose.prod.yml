@@ -41,11 +41,14 @@ services:
       EMAIL_HOST_USER: ${EMAIL_HOST_USER}
       EMAIL_HOST_PASSWORD: ${EMAIL_HOST_PASSWORD}
       DEFAULT_FROM_EMAIL: ${DEFAULT_FROM_EMAIL}
-      ATTENDANCE_EMAIL_ENCRYPTION_KEY: ${ATTENDANCE_EMAIL_ENCRYPTION_KEY}      
+      ATTENDANCE_EMAIL_ENCRYPTION_KEY: ${ATTENDANCE_EMAIL_ENCRYPTION_KEY}
       ATTENDANCE_OTP_SENDER_EMAIL: ${ATTENDANCE_OTP_SENDER_EMAIL}
       ATTENDANCE_OTP_APP_PASSWORD: ${ATTENDANCE_OTP_APP_PASSWORD}
       ATTENDANCE_OTP_SMTP_HOST: ${ATTENDANCE_OTP_SMTP_HOST:-smtp.gmail.com}
       ATTENDANCE_OTP_SMTP_PORT: ${ATTENDANCE_OTP_SMTP_PORT:-587}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379/1}
+      CELERY_BROKER_URL: ${CELERY_BROKER_URL:-redis://redis:6379/0}
+      CELERY_RESULT_BACKEND: ${CELERY_RESULT_BACKEND:-redis://redis:6379/0}
       DJANGO_SETTINGS_MODULE: config.settings.prod
     volumes:
       - backend_media:/app/media
@@ -57,11 +60,11 @@ services:
         condition: service_started
     entrypoint: /app/entrypoint.prod.sh
 
-  celery_worker:
+  celery:
     build:
       context: ../backend
       dockerfile: Dockerfile
-    container_name: managora_celery_worker
+    container_name: managora_celery
     env_file:
       - .env.prod
     environment:
@@ -75,19 +78,23 @@ services:
       EMAIL_HOST_USER: ${EMAIL_HOST_USER}
       EMAIL_HOST_PASSWORD: ${EMAIL_HOST_PASSWORD}
       DEFAULT_FROM_EMAIL: ${DEFAULT_FROM_EMAIL}
-      ATTENDANCE_EMAIL_ENCRYPTION_KEY: ${ATTENDANCE_EMAIL_ENCRYPTION_KEY}      
+      ATTENDANCE_EMAIL_ENCRYPTION_KEY: ${ATTENDANCE_EMAIL_ENCRYPTION_KEY}
       ATTENDANCE_OTP_SENDER_EMAIL: ${ATTENDANCE_OTP_SENDER_EMAIL}
       ATTENDANCE_OTP_APP_PASSWORD: ${ATTENDANCE_OTP_APP_PASSWORD}
       ATTENDANCE_OTP_SMTP_HOST: ${ATTENDANCE_OTP_SMTP_HOST:-smtp.gmail.com}
       ATTENDANCE_OTP_SMTP_PORT: ${ATTENDANCE_OTP_SMTP_PORT:-587}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379/1}
+      CELERY_BROKER_URL: ${CELERY_BROKER_URL:-redis://redis:6379/0}
+      CELERY_RESULT_BACKEND: ${CELERY_RESULT_BACKEND:-redis://redis:6379/0}
       DJANGO_SETTINGS_MODULE: config.settings.prod
     depends_on:
-      - backend
-      - redis
+      backend:
+        condition: service_started
+      redis:
+        condition: service_started
     command: celery -A config worker -l info
-    profiles: ["worker"]
 
-  celery_beat:
+  celery-beat:
     build:
       context: ../backend
       dockerfile: Dockerfile
@@ -103,17 +110,21 @@ services:
       EMAIL_PORT: ${EMAIL_PORT:-587}
       EMAIL_USE_TLS: ${EMAIL_USE_TLS:-1}
       DEFAULT_FROM_EMAIL: ${DEFAULT_FROM_EMAIL}
-      ATTENDANCE_EMAIL_ENCRYPTION_KEY: ${ATTENDANCE_EMAIL_ENCRYPTION_KEY}      
+      ATTENDANCE_EMAIL_ENCRYPTION_KEY: ${ATTENDANCE_EMAIL_ENCRYPTION_KEY}
       ATTENDANCE_OTP_SENDER_EMAIL: ${ATTENDANCE_OTP_SENDER_EMAIL}
       ATTENDANCE_OTP_APP_PASSWORD: ${ATTENDANCE_OTP_APP_PASSWORD}
       ATTENDANCE_OTP_SMTP_HOST: ${ATTENDANCE_OTP_SMTP_HOST:-smtp.gmail.com}
       ATTENDANCE_OTP_SMTP_PORT: ${ATTENDANCE_OTP_SMTP_PORT:-587}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379/1}
+      CELERY_BROKER_URL: ${CELERY_BROKER_URL:-redis://redis:6379/0}
+      CELERY_RESULT_BACKEND: ${CELERY_RESULT_BACKEND:-redis://redis:6379/0}
       DJANGO_SETTINGS_MODULE: config.settings.prod
     depends_on:
-      - backend
-      - redis
+      backend:
+        condition: service_started
+      redis:
+        condition: service_started
     command: celery -A config beat -l info
-    profiles: ["worker"]
 
   frontend:
     build:

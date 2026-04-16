@@ -58,9 +58,9 @@ services:
       ATTENDANCE_OTP_APP_PASSWORD: ${ATTENDANCE_OTP_APP_PASSWORD}
       ATTENDANCE_OTP_SMTP_HOST: ${ATTENDANCE_OTP_SMTP_HOST:-smtp.gmail.com}
       ATTENDANCE_OTP_SMTP_PORT: ${ATTENDANCE_OTP_SMTP_PORT:-587}
-      REDIS_URL: ${REDIS_URL}
-      CELERY_BROKER_URL: ${CELERY_BROKER_URL}
-      CELERY_RESULT_BACKEND: ${CELERY_RESULT_BACKEND}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379/1}
+      CELERY_BROKER_URL: ${CELERY_BROKER_URL:-redis://redis:6379/0}
+      CELERY_RESULT_BACKEND: ${CELERY_RESULT_BACKEND:-redis://redis:6379/0}
       DJANGO_SETTINGS_MODULE: config.settings.prod
     volumes:
       - backend_media:/app/media
@@ -71,6 +71,78 @@ services:
       redis:
         condition: service_started
     entrypoint: /app/entrypoint.prod.sh
+    networks:
+      - app_net
+
+  celery:
+    build:
+      context: ../backend
+      dockerfile: Dockerfile
+    container_name: managora_celery
+    restart: unless-stopped
+    env_file:
+      - .env.vps
+    environment:
+      POSTGRES_HOST: ${POSTGRES_HOST:-db}
+      POSTGRES_PORT: ${POSTGRES_PORT:-5432}
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      SECRET_KEY: ${DJANGO_SECRET_KEY}
+      DEBUG: ${DJANGO_DEBUG}
+      ALLOWED_HOSTS: ${DJANGO_ALLOWED_HOSTS}
+      EMAIL_BACKEND: ${EMAIL_BACKEND:-django.core.mail.backends.smtp.EmailBackend}
+      EMAIL_HOST: ${EMAIL_HOST:-smtp.gmail.com}
+      EMAIL_PORT: ${EMAIL_PORT:-587}
+      EMAIL_USE_TLS: ${EMAIL_USE_TLS:-1}
+      EMAIL_HOST_USER: ${EMAIL_HOST_USER}
+      EMAIL_HOST_PASSWORD: ${EMAIL_HOST_PASSWORD}
+      DEFAULT_FROM_EMAIL: ${DEFAULT_FROM_EMAIL}
+      ATTENDANCE_EMAIL_ENCRYPTION_KEY: ${ATTENDANCE_EMAIL_ENCRYPTION_KEY}
+      ATTENDANCE_OTP_SENDER_EMAIL: ${ATTENDANCE_OTP_SENDER_EMAIL}
+      ATTENDANCE_OTP_APP_PASSWORD: ${ATTENDANCE_OTP_APP_PASSWORD}
+      ATTENDANCE_OTP_SMTP_HOST: ${ATTENDANCE_OTP_SMTP_HOST:-smtp.gmail.com}
+      ATTENDANCE_OTP_SMTP_PORT: ${ATTENDANCE_OTP_SMTP_PORT:-587}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379/1}
+      CELERY_BROKER_URL: ${CELERY_BROKER_URL:-redis://redis:6379/0}
+      CELERY_RESULT_BACKEND: ${CELERY_RESULT_BACKEND:-redis://redis:6379/0}
+      DJANGO_SETTINGS_MODULE: config.settings.prod
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    command: celery -A config worker -l info
+    networks:
+      - app_net
+
+  celery-beat:
+    build:
+      context: ../backend
+      dockerfile: Dockerfile
+    container_name: managora_celery_beat
+    restart: unless-stopped
+    env_file:
+      - .env.vps
+    environment:
+      POSTGRES_HOST: ${POSTGRES_HOST:-db}
+      POSTGRES_PORT: ${POSTGRES_PORT:-5432}
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      SECRET_KEY: ${DJANGO_SECRET_KEY}
+      DEBUG: ${DJANGO_DEBUG}
+      ALLOWED_HOSTS: ${DJANGO_ALLOWED_HOSTS}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379/1}
+      CELERY_BROKER_URL: ${CELERY_BROKER_URL:-redis://redis:6379/0}
+      CELERY_RESULT_BACKEND: ${CELERY_RESULT_BACKEND:-redis://redis:6379/0}
+      DJANGO_SETTINGS_MODULE: config.settings.prod
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    command: celery -A config beat -l info
     networks:
       - app_net
 
