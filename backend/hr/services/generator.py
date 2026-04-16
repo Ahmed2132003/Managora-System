@@ -58,6 +58,8 @@ def _overlap_days(start_date, end_date, range_start, range_end):
 
 def _salary_type_matches_period(*, salary_type: str, period_type: str) -> bool:
     """Keep legacy compatibility while allowing attendance-based salaries in monthly runs."""
+    salary_type = _normalize_type_value(salary_type)
+    period_type = _normalize_type_value(period_type)
     if salary_type == SalaryStructure.SalaryType.COMMISSION:
         return True
     if salary_type == period_type:
@@ -68,6 +70,58 @@ def _salary_type_matches_period(*, salary_type: str, period_type: str) -> bool:
     }:
         return True
     return False
+
+
+def _normalize_type_value(value: str | None) -> str:
+    if value is None:
+        return ""
+    return str(value).strip().lower()
+
+
+def _resolve_employee_salary_type(employee: Employee, salary_structure: SalaryStructure | None) -> str:
+    """
+    Resolve salary type with backward-compatibility for legacy schemas/data.
+    Priority:
+    1) SalaryStructure.salary_type
+    2) Employee.salary_type (legacy)
+    3) Employee.pay_type (legacy)
+    """
+    if salary_structure is not None and getattr(salary_structure, "salary_type", None):
+        return _normalize_type_value(salary_structure.salary_type)
+
+    for field_name in ("salary_type", "pay_type"):
+        if _employee_has_field(field_name):
+            field_value = getattr(employee, field_name, None)
+            if field_value:
+                return _normalize_type_value(field_value)
+    return ""
+
+
+def _period_allowed_salary_types(period_type: str) -> set[str]:
+    period_type = _normalize_type_value(period_type)
+    if period_type == PayrollPeriod.PeriodType.MONTHLY:
+        return {
+            SalaryStructure.SalaryType.MONTHLY,
+            SalaryStructure.SalaryType.DAILY,
+            SalaryStructure.SalaryType.WEEKLY,
+            SalaryStructure.SalaryType.COMMISSION,
+        }
+    if period_type == PayrollPeriod.PeriodType.WEEKLY:
+        return {
+            SalaryStructure.SalaryType.WEEKLY,
+            SalaryStructure.SalaryType.COMMISSION,
+        }
+    if period_type == PayrollPeriod.PeriodType.DAILY:
+        return {
+            SalaryStructure.SalaryType.DAILY,
+            SalaryStructure.SalaryType.COMMISSION,
+        }
+    return {
+        SalaryStructure.SalaryType.DAILY,
+        SalaryStructure.SalaryType.WEEKLY,
+        SalaryStructure.SalaryType.MONTHLY,
+        SalaryStructure.SalaryType.COMMISSION,
+    }
 
 
 def _employee_has_field(field_name: str) -> bool:
@@ -157,7 +211,8 @@ def generate_period(company, year=None, month=None, actor=None, period=None):
 
     summary = {"generated": 0, "skipped": []}
 
-    period_type = period.period_type
+    period_type = _normalize_type_value(period.period_type)
+    allowed_salary_types = _period_allowed_salary_types(period_type)
     logger.info(
         "Starting payroll generation",
         extra={
@@ -167,8 +222,21 @@ def generate_period(company, year=None, month=None, actor=None, period=None):
             "start_date": str(start_date),
             "end_date": str(end_date),
             "eligible_employee_count": employee_count,
+            "allowed_salary_types": sorted(allowed_salary_types),
         },
     )
+
+    debug_preview = [
+        {
+            "id": row["id"],
+            "name": row["full_name"],
+            "salary_type": _normalize_type_value(row["salary_structure__salary_type"]),
+        }
+        for row in employees.values("id", "full_name", "salary_structure__salary_type")
+    ]
+    print("Period type:", period_type)
+    print("Employees count:", employee_count)
+    print("Employees:", debug_preview)
 
     with transaction.atomic():
         for employee in employees:
@@ -179,20 +247,24 @@ def generate_period(company, year=None, month=None, actor=None, period=None):
             if salary_structure is None:
                 summary["skipped"].append(
                     {
-                        "employee_id": employee.id,                        
+                        "employee_id": employee.id,
                         "reason": "Salary structure is missing.",
                     }
                 )
                 continue
 
+            salary_type = _resolve_employee_salary_type(employee, salary_structure)
             if not _salary_type_matches_period(
-                salary_type=salary_structure.salary_type,
+                salary_type=salary_type,
                 period_type=period_type,
             ):
                 summary["skipped"].append(
                     {
                         "employee_id": employee.id,
-                        "reason": "Salary type does not match payroll period.",
+                        "reason": (
+                            f"Salary type does not match payroll period "
+                            f"(salary_type={salary_type or 'missing'}, period_type={period_type})."
+                        ),
                     }
                 )
                 continue
@@ -218,7 +290,7 @@ def generate_period(company, year=None, month=None, actor=None, period=None):
             deductions_total = Decimal("0")
             lines = []
 
-            attendance_based_salary = salary_structure.salary_type in (
+            attendance_based_salary = salary_type in (
                 SalaryStructure.SalaryType.DAILY,
                 SalaryStructure.SalaryType.WEEKLY,
             )
@@ -227,7 +299,7 @@ def generate_period(company, year=None, month=None, actor=None, period=None):
                 basic_salary_amount = _quantize_amount(daily_rate * present_days)
 
             if (
-                salary_structure.salary_type != SalaryStructure.SalaryType.COMMISSION
+                salary_type != SalaryStructure.SalaryType.COMMISSION
                 and basic_salary_amount > 0
             ):
                 meta = {}
