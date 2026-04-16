@@ -161,11 +161,16 @@ class AttendanceCodeSubmitSerializer(serializers.Serializer):
 
 
 class AttendanceCodeGenerateSerializer(serializers.Serializer):
-    purpose = serializers.ChoiceField(read_only=True)
+    PURPOSE_CHOICES = [
+        ("checkin", "Check In"),
+        ("checkout", "Check Out"),
+    ]
+
+    purpose = serializers.ChoiceField(choices=PURPOSE_CHOICES, read_only=True)
     code = serializers.CharField(read_only=True)
     expires_at = serializers.DateTimeField(read_only=True)
     ttl_seconds = serializers.IntegerField(read_only=True)
-    
+        
 
 class AttendanceSelfRequestOtpSerializer(serializers.Serializer):    
     purpose = serializers.ChoiceField(choices=["checkin", "checkout"])
