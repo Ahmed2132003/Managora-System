@@ -137,14 +137,14 @@ class AttendanceApprovalDecisionSerializer(serializers.Serializer):
 
 
 class ManualAttendanceCreateSerializer(serializers.Serializer):
+    action = serializers.ChoiceField(choices=["checkin", "checkout"])
     employee_id = serializers.PrimaryKeyRelatedField(
         source="employee",
         queryset=Employee.objects.all(),
     )
     date = serializers.DateField()
-    check_in_time = serializers.DateTimeField()
-    check_out_time = serializers.DateTimeField(required=False, allow_null=True)
-
+    time = serializers.DateTimeField()
+    
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         request = self.context.get("request")
@@ -152,22 +152,20 @@ class ManualAttendanceCreateSerializer(serializers.Serializer):
             self.fields["employee_id"].queryset = Employee.objects.filter(company=request.user.company)
 
     def validate(self, attrs):
-        check_in = attrs["check_in_time"]
-        check_out = attrs.get("check_out_time")
-        if check_out and check_out < check_in:
-            raise serializers.ValidationError({"check_out_time": "check_out_time must be after check_in_time."})
         return attrs
 
 
 class AttendanceCodeSubmitSerializer(serializers.Serializer):
+    purpose = serializers.ChoiceField(choices=["checkin", "checkout"])
     code = serializers.CharField(min_length=6, max_length=12)
 
 
 class AttendanceCodeGenerateSerializer(serializers.Serializer):
+    purpose = serializers.ChoiceField(read_only=True)
     code = serializers.CharField(read_only=True)
     expires_at = serializers.DateTimeField(read_only=True)
     ttl_seconds = serializers.IntegerField(read_only=True)
-
+    
 
 class AttendanceSelfRequestOtpSerializer(serializers.Serializer):    
     purpose = serializers.ChoiceField(choices=["checkin", "checkout"])

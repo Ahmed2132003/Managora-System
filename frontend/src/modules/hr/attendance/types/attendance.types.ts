@@ -35,13 +35,14 @@ export type AttendanceFilters = {
 };
 
 export type ManualAttendancePayload = {
+  action: "checkin" | "checkout";
   employee_id: number;
   date: string;
-  check_in_time: string;
-  check_out_time?: string | null;
+  time: string;
 };
 
 export type AttendanceCodePayload = {
+  purpose: "checkin" | "checkout";
   code: string;
   expires_at: string;
   ttl_seconds: number;

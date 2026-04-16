@@ -179,7 +179,12 @@ class AttendanceOtpRequest(BaseModel):
 
 
 class AttendanceCode(BaseModel):
-    code_hash = models.CharField(max_length=128)
+    class Purpose(models.TextChoices):
+        CHECK_IN = "checkin", "Check-in"
+        CHECK_OUT = "checkout", "Check-out"
+
+    purpose = models.CharField(max_length=10, choices=Purpose.choices, default=Purpose.CHECK_IN)
+    code_hash = models.CharField(max_length=128)    
     expires_at = models.DateTimeField()
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,

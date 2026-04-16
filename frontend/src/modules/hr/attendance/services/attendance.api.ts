@@ -52,7 +52,9 @@ export async function createManualAttendance(payload: ManualAttendancePayload) {
   return response.data;
 }
 
-export async function getRotatingAttendanceCode() {
-  const response = await http.get<AttendanceCodePayload>(endpoints.hr.attendanceCodeGenerate);
+export async function getRotatingAttendanceCode(purpose: "checkin" | "checkout") {
+  const response = await http.get<AttendanceCodePayload>(endpoints.hr.attendanceCodeGenerate, {
+    params: { purpose },
+  });
   return response.data;
 }

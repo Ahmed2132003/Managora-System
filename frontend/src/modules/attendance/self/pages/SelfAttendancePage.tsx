@@ -85,7 +85,8 @@ export function SelfAttendancePage() {
   const requestOtp = useAttendanceSelfRequestOtpMutation();
   const verifyOtp = useAttendanceSelfVerifyOtpMutation();
   const submitCodeMutation = useAttendanceCodeSubmitMutation();
-  const [attendanceCode, setAttendanceCode] = useState("");
+  const [checkInCode, setCheckInCode] = useState("");
+  const [checkOutCode, setCheckOutCode] = useState("");
 
   useEffect(() => {
     if (!expiresIn) return;
@@ -164,15 +165,40 @@ export function SelfAttendancePage() {
     queryClient,
   ]);
 
-  const handleSubmitAttendanceCode = useCallback(async () => {
-    if (!attendanceCode.trim()) return;
+  const handleSubmitCheckInCode = useCallback(async () => {
+    if (!checkInCode.trim()) return;
     try {
-      await submitCodeMutation.mutateAsync({ code: attendanceCode.trim() });
+      await submitCodeMutation.mutateAsync({ code: checkInCode.trim(), purpose: "checkin" });
       notifications.show({
         title: content.otpSubmittedTitle,
         message: content.otpSubmittedMessage,
       });
-      setAttendanceCode("");
+      setCheckInCode("");
+      await queryClient.invalidateQueries({ queryKey: ["attendance", "my"] });
+    } catch (error: unknown) {
+      notifications.show({
+        title: content.otpVerifyFailedTitle,        
+        message: String(getErrorDetail(error)),
+        color: "red",
+      });
+    }
+  }, [
+    checkInCode,
+    content.otpSubmittedMessage,
+    content.otpSubmittedTitle,
+    content.otpVerifyFailedTitle,
+    queryClient,
+    submitCodeMutation,
+  ]);
+  const handleSubmitCheckOutCode = useCallback(async () => {
+    if (!checkOutCode.trim()) return;
+    try {
+      await submitCodeMutation.mutateAsync({ code: checkOutCode.trim(), purpose: "checkout" });
+      notifications.show({
+        title: content.otpSubmittedTitle,
+        message: content.otpSubmittedMessage,
+      });
+      setCheckOutCode("");
       await queryClient.invalidateQueries({ queryKey: ["attendance", "my"] });
     } catch (error: unknown) {
       notifications.show({
@@ -182,7 +208,7 @@ export function SelfAttendancePage() {
       });
     }
   }, [
-    attendanceCode,
+    checkOutCode,
     content.otpSubmittedMessage,
     content.otpSubmittedTitle,
     content.otpVerifyFailedTitle,
@@ -377,14 +403,18 @@ export function SelfAttendancePage() {
               canVerify={canVerify}
               isRequestPending={requestOtp.isPending}
               isVerifyPending={verifyOtp.isPending}
-              codeValue={attendanceCode}
-              isCodeSubmitting={submitCodeMutation.isPending}
+              checkInCodeValue={checkInCode}
+              checkOutCodeValue={checkOutCode}
+              isCheckInCodeSubmitting={submitCodeMutation.isPending}
+              isCheckOutCodeSubmitting={submitCodeMutation.isPending}
               onRequestOtp={handleRequestOtp}
               onOtpCodeChange={setOtpCode}
               onVerifyOtp={handleVerifyOtp}
-              onCodeChange={setAttendanceCode}
-              onSubmitCode={handleSubmitAttendanceCode}
-            />            
+              onCheckInCodeChange={setCheckInCode}
+              onSubmitCheckInCode={handleSubmitCheckInCode}
+              onCheckOutCodeChange={setCheckOutCode}
+              onSubmitCheckOutCode={handleSubmitCheckOutCode}
+            />                                 
           </section>
         </main>
       </div>

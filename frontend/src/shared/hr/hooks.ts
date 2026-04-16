@@ -63,13 +63,14 @@ export type AttendancePendingItem = {
 };
 
 export type AttendanceManualPayload = {
+  action: "checkin" | "checkout";
   employee_id: number;
   date: string;
-  check_in_time: string;
-  check_out_time?: string | null;
+  time: string;
 };
 
 export type AttendanceCodeGenerateResponse = {
+  purpose: "checkin" | "checkout";
   code: string;
   expires_at: string;
   ttl_seconds: number;
@@ -1511,11 +1512,13 @@ export function useAttendanceManualCreateMutation() {
 
 export function useAttendanceCodeGenerateQuery(enabled = true) {
   return useQuery({
-    queryKey: ["attendance", "code", "current"],
+    queryKey: ["attendance", "code", "current", "checkin"],
     queryFn: async () => {
-      const response = await http.get<AttendanceCodeGenerateResponse>(endpoints.hr.attendanceCodeGenerate);
+      const response = await http.get<AttendanceCodeGenerateResponse>(endpoints.hr.attendanceCodeGenerate, {
+        params: { purpose: "checkin" },
+      });
       return response.data;
-    },
+    },    
     enabled,
     staleTime: 15_000,
     refetchInterval: 30_000,
@@ -1525,7 +1528,7 @@ export function useAttendanceCodeGenerateQuery(enabled = true) {
 
 export function useAttendanceCodeSubmitMutation() {
   return useMutation({
-    mutationFn: async (payload: { code: string }) => {
+    mutationFn: async (payload: { code: string; purpose: "checkin" | "checkout" }) => {      
       const response = await http.post<AttendanceRecord>(endpoints.hr.attendanceCodeSubmit, payload);
       return response.data;
     },

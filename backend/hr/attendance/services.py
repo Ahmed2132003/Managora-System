@@ -300,56 +300,110 @@ def create_manual_attendance(*, actor, payload: dict) -> AttendanceRecord:
     ensure_can_manage_attendance(actor)
     employee = payload["employee"]
     attendance_date = payload["date"]
-    check_in = payload["check_in_time"]
-    check_out = payload.get("check_out_time")
+    action = payload["action"]
+    action_time = payload["time"]
 
     existing = AttendanceRecord.objects.filter(
         company=actor.company,
         employee=employee,
         date=attendance_date,
     ).first()
-    if existing:
-        raise ValidationError({"date": "Attendance already exists for this employee and date."})
 
-    if check_out and check_out < check_in:
-        raise ValidationError({"check_out_time": "check_out_time must be after check_in_time."})
+    now = timezone.now()
+    if action == "checkin":
+        if existing and existing.check_in_time:
+            raise ValidationError({"date": "Check-in already exists for this employee and date."})
+        if existing is None:
+            return AttendanceRecord.objects.create(
+                company=actor.company,
+                employee=employee,
+                date=attendance_date,
+                check_in_time=action_time,
+                method=AttendanceRecord.Method.MANUAL,
+                status=AttendanceRecord.Status.INCOMPLETE,
+                created_by=actor,
+                check_in_approval_status=AttendanceRecord.ApprovalStatus.APPROVED,
+                check_in_approved_by=actor,
+                check_in_approved_at=now,
+            )
 
-    status = AttendanceRecord.Status.PRESENT
-    if check_out is None:
-        status = AttendanceRecord.Status.INCOMPLETE
+        existing.check_in_time = action_time
+        existing.method = AttendanceRecord.Method.MANUAL
+        existing.status = (
+            AttendanceRecord.Status.PRESENT
+            if existing.check_out_time
+            else AttendanceRecord.Status.INCOMPLETE
+        )
+        existing.created_by = actor
+        existing.check_in_approval_status = AttendanceRecord.ApprovalStatus.APPROVED
+        existing.check_in_approved_by = actor
+        existing.check_in_approved_at = now
+        existing.check_in_rejection_reason = None
+        existing.save(
+            update_fields=[
+                "check_in_time",
+                "method",
+                "status",
+                "created_by",
+                "check_in_approval_status",
+                "check_in_approved_by",
+                "check_in_approved_at",
+                "check_in_rejection_reason",
+                "updated_at",
+            ]
+        )
+        return existing
 
-    record = AttendanceRecord.objects.create(
-        company=actor.company,
-        employee=employee,
-        date=attendance_date,
-        check_in_time=check_in,
-        check_out_time=check_out,
-        method=AttendanceRecord.Method.MANUAL,
-        status=status,
-        created_by=actor,
-        check_in_approval_status=AttendanceRecord.ApprovalStatus.APPROVED,
-        check_out_approval_status=(
-            AttendanceRecord.ApprovalStatus.APPROVED if check_out else None
-        ),
-        check_in_approved_by=actor,
-        check_out_approved_by=actor if check_out else None,
-        check_in_approved_at=timezone.now(),
-        check_out_approved_at=timezone.now() if check_out else None,
+    if not existing or not existing.check_in_time:
+        raise ValidationError({"action": "Cannot add check-out without a prior check-in."})
+    if existing.check_out_time:
+        raise ValidationError({"action": "Check-out already exists for this employee and date."})
+    if action_time <= existing.check_in_time:
+        raise ValidationError({"time": "check_out_time must be after check_in_time."})
+
+    existing.check_out_time = action_time
+    existing.method = AttendanceRecord.Method.MANUAL
+    existing.status = (
+        existing.status
+        if existing.status == AttendanceRecord.Status.LATE
+        else AttendanceRecord.Status.PRESENT
     )
-    return record
+    existing.created_by = actor
+    existing.check_out_approval_status = AttendanceRecord.ApprovalStatus.APPROVED
+    existing.check_out_approved_by = actor
+    existing.check_out_approved_at = now
+    existing.check_out_rejection_reason = None
+    existing.save(
+        update_fields=[
+            "check_out_time",
+            "method",
+            "status",
+            "created_by",
+            "check_out_approval_status",
+            "check_out_approved_by",
+            "check_out_approved_at",
+            "check_out_rejection_reason",
+            "updated_at",
+        ]
+    )
+    return existing
 
 
-def generate_rotating_attendance_code(*, actor) -> dict:
+def generate_rotating_attendance_code(*, actor, purpose: str) -> dict:
     ensure_can_manage_attendance(actor)
+    if purpose not in {"checkin", "checkout"}:
+        raise ValidationError({"purpose": "purpose must be checkin or checkout."})
     raw_code = "".join(secrets.choice("ABCDEFGHJKLMNPQRSTUVWXYZ23456789") for _ in range(6))
     expires_at = timezone.now() + timedelta(seconds=30)
     AttendanceCode.objects.create(
         company=actor.company,
+        purpose=purpose,
         code_hash=make_password(raw_code),
         expires_at=expires_at,
         created_by=actor,
     )
     return {
+        "purpose": purpose,
         "code": raw_code,
         "expires_at": expires_at,
         "ttl_seconds": 30,
@@ -357,7 +411,9 @@ def generate_rotating_attendance_code(*, actor) -> dict:
 
 
 @transaction.atomic
-def submit_code_attendance(*, actor, code: str) -> AttendanceRecord:
+def submit_code_attendance(*, actor, code: str, purpose: str) -> AttendanceRecord:
+    if purpose not in {"checkin", "checkout"}:
+        raise ValidationError({"purpose": "purpose must be checkin or checkout."})    
     employee = getattr(actor, "employee_profile", None)
     if not employee or employee.company_id != actor.company_id or employee.is_deleted:
         raise ValidationError({"employee": "Employee profile is required for code attendance."})
@@ -365,9 +421,10 @@ def submit_code_attendance(*, actor, code: str) -> AttendanceRecord:
     now = timezone.now()
     active_codes = AttendanceCode.objects.filter(
         company=actor.company,
+        purpose=purpose,
         expires_at__gte=now,
     ).order_by("-created_at")
-
+    
     matched_code = None
     for code_record in active_codes:
         if check_password(code, code_record.code_hash):
@@ -377,45 +434,74 @@ def submit_code_attendance(*, actor, code: str) -> AttendanceRecord:
         raise ValidationError({"code": "Invalid or expired attendance code."})
 
     record_date = timezone.localdate(now)
-    existing = AttendanceRecord.objects.filter(
+    record = AttendanceRecord.objects.filter(
         company=actor.company,
         employee=employee,
         date=record_date,
     ).first()
-    if existing and existing.check_in_time:
-        raise ValidationError({"date": "Attendance already exists for this employee and date."})
+    if purpose == "checkin":
+        if record and record.check_in_time:
+            raise ValidationError({"date": "Check-in already exists for this employee and date."})
 
-    if existing is None:
-        return AttendanceRecord.objects.create(
-            company=actor.company,
-            employee=employee,
-            date=record_date,
-            check_in_time=now,
-            method=AttendanceRecord.Method.CODE,
-            status=AttendanceRecord.Status.PRESENT,
-            check_in_approval_status=AttendanceRecord.ApprovalStatus.PENDING,
+        if record is None:
+            return AttendanceRecord.objects.create(
+                company=actor.company,
+                employee=employee,
+                date=record_date,
+                check_in_time=now,
+                method=AttendanceRecord.Method.CODE,
+                status=AttendanceRecord.Status.PRESENT,
+                check_in_approval_status=AttendanceRecord.ApprovalStatus.PENDING,
+            )
+
+        record.check_in_time = now
+        record.method = AttendanceRecord.Method.CODE
+        record.status = _resolve_approved_status_for_record(record)
+        record.check_in_approval_status = AttendanceRecord.ApprovalStatus.PENDING
+        record.check_in_approved_by = None
+        record.check_in_approved_at = None
+        record.check_in_rejection_reason = None
+        record.save(
+            update_fields=[
+                "check_in_time",
+                "method",
+                "status",
+                "check_in_approval_status",
+                "check_in_approved_by",
+                "check_in_approved_at",
+                "check_in_rejection_reason",
+                "updated_at",
+            ]
         )
+        return record
 
-    existing.check_in_time = now
-    existing.method = AttendanceRecord.Method.CODE
-    existing.status = _resolve_approved_status_for_record(existing)
-    existing.check_in_approval_status = AttendanceRecord.ApprovalStatus.PENDING
-    existing.check_in_approved_by = None
-    existing.check_in_approved_at = None
-    existing.check_in_rejection_reason = None
-    existing.save(
+    if not record or not record.check_in_time:
+        raise ValidationError({"action": "Cannot check out without a prior check-in."})
+    if record.check_out_time:
+        raise ValidationError({"action": "Already checked out for this session."})
+    if now <= record.check_in_time:
+        raise ValidationError({"action": "Check-out time must be after check-in time."})
+
+    record.check_out_time = now
+    record.method = AttendanceRecord.Method.CODE
+    record.status = _resolve_approved_status_for_record(record)
+    record.check_out_approval_status = AttendanceRecord.ApprovalStatus.PENDING
+    record.check_out_approved_by = None
+    record.check_out_approved_at = None
+    record.check_out_rejection_reason = None
+    record.save(
         update_fields=[
-            "check_in_time",
+            "check_out_time",
             "method",
             "status",
-            "check_in_approval_status",
-            "check_in_approved_by",
-            "check_in_approved_at",
-            "check_in_rejection_reason",
+            "check_out_approval_status",
+            "check_out_approved_by",
+            "check_out_approved_at",
+            "check_out_rejection_reason",
             "updated_at",
         ]
     )
-    return existing
+    return record
     
 
 check_in = attendance_check_in

@@ -192,13 +192,14 @@ export function AttendancePage() {
   const approveReject = useApproveAttendance();
   const rejectAttendanceMutation = useRejectAttendance();
   const manualAttendanceCreate = useManualAttendanceCreate();
-  const rotatingCodeQuery = useRotatingAttendanceCode(canManageSchedule);
+  const rotatingCheckInCodeQuery = useRotatingAttendanceCode(canManageSchedule, "checkin");
+  const rotatingCheckOutCodeQuery = useRotatingAttendanceCode(canManageSchedule, "checkout");
   const [rejectReason, setRejectReason] = useState("");
   const [manualEmployeeId, setManualEmployeeId] = useState<string>("");
   const [manualDate, setManualDate] = useState<string>(() => new Date().toISOString().slice(0, 10));
-  const [manualCheckIn, setManualCheckIn] = useState<string>("09:00");
-  const [manualCheckOut, setManualCheckOut] = useState<string>("");
-
+  const [manualAction, setManualAction] = useState<"checkin" | "checkout">("checkin");
+  const [manualTime, setManualTime] = useState<string>("09:00");
+  
   async function handleApproval(item: AttendancePendingItem, op: "approve" | "reject") {
     try {
       if (op === "reject") {
@@ -226,29 +227,35 @@ export function AttendancePage() {
   }
 
   async function handleCreateManualAttendance() {
-    if (!manualEmployeeId || !manualDate || !manualCheckIn) {
+    if (!manualEmployeeId || !manualDate || !manualTime) {
       notifications.show({
         title: content.approvals.failedTitle,
-        message: isArabic ? "يرجى اختيار الموظف والتاريخ ووقت الحضور." : "Please select employee, date and check-in time.",
+        message: isArabic ? "يرجى اختيار الموظف والتاريخ ونوع الحركة والوقت." : "Please select employee, date, action and time.",
         color: "red",
       });
       return;
     }
-    const checkInIso = new Date(`${manualDate}T${manualCheckIn}:00`).toISOString();
-    const checkOutIso = manualCheckOut ? new Date(`${manualDate}T${manualCheckOut}:00`).toISOString() : null;
+    const manualTimeIso = new Date(`${manualDate}T${manualTime}:00`).toISOString();
     try {
       await manualAttendanceCreate.mutateAsync({
+        action: manualAction,
         employee_id: Number(manualEmployeeId),
         date: manualDate,
-        check_in_time: checkInIso,
-        check_out_time: checkOutIso,
+        time: manualTimeIso,
       });
       notifications.show({
         title: isArabic ? "تم الحفظ" : "Saved",
-        message: isArabic ? "تم إنشاء الحضور اليدوي بنجاح." : "Manual attendance created successfully.",
+        message:
+          manualAction === "checkin"
+            ? isArabic
+              ? "تم تسجيل حضور يدوي بنجاح."
+              : "Manual check-in created successfully."
+            : isArabic
+              ? "تم تسجيل انصراف يدوي بنجاح."
+              : "Manual check-out created successfully.",
       });
-      setManualCheckOut("");
-      await attendanceQuery.refetch();
+      setManualTime("09:00");
+      await attendanceQuery.refetch();      
     } catch (error: unknown) {
       notifications.show({
         title: isArabic ? "فشل إنشاء الحضور" : "Failed to create attendance",
@@ -744,24 +751,26 @@ export function AttendancePage() {
                 />
               </label>
               <label className="filter-field">
-                {isArabic ? "وقت الحضور" : "Check-in time"}
-                <input
-                  type="time"
-                  value={manualCheckIn}
-                  onChange={(event) => setManualCheckIn(event.target.value)}
+                {isArabic ? "النوع" : "Action"}
+                <select
+                  value={manualAction}
+                  onChange={(event) => setManualAction(event.target.value as "checkin" | "checkout")}
                   disabled={!canManageSchedule}
-                />
+                >
+                  <option value="checkin">{isArabic ? "حضور" : "Check-in"}</option>
+                  <option value="checkout">{isArabic ? "انصراف" : "Check-out"}</option>
+                </select>
               </label>
               <label className="filter-field">
-                {isArabic ? "وقت الانصراف (اختياري)" : "Check-out time (optional)"}
+                {isArabic ? "الوقت" : "Time"}
                 <input
                   type="time"
-                  value={manualCheckOut}
-                  onChange={(event) => setManualCheckOut(event.target.value)}
+                  value={manualTime}
+                  onChange={(event) => setManualTime(event.target.value)}
                   disabled={!canManageSchedule}
                 />
               </label>
-            </div>
+            </div>            
             <div style={{ marginTop: 12 }}>
               <button
                 type="button"
@@ -773,9 +782,13 @@ export function AttendancePage() {
                   ? isArabic
                     ? "جاري الحفظ..."
                     : "Saving..."
-                  : isArabic
-                    ? "إضافة حضور يدوي"
-                    : "Create manual attendance"}
+                  : manualAction === "checkin"
+                    ? isArabic
+                      ? "إضافة حضور يدوي"
+                      : "Create manual check-in"
+                    : isArabic
+                      ? "إضافة انصراف يدوي"
+                      : "Create manual check-out"}
               </button>
             </div>
           </section>
@@ -790,24 +803,43 @@ export function AttendancePage() {
                     : "Code rotates every 30 seconds. Share it with employees for pending attendance submissions."}
                 </p>
               </div>
-              <button type="button" className="ghost-button" onClick={() => rotatingCodeQuery.refetch()}>
+              <button
+                type="button"
+                className="ghost-button"
+                onClick={() => {
+                  rotatingCheckInCodeQuery.refetch();
+                  rotatingCheckOutCodeQuery.refetch();
+                }}
+              >
                 {isArabic ? "تحديث الكود" : "Refresh code"}
               </button>
             </div>
             <div className="qr-token-card">
-              {rotatingCodeQuery.isLoading ? (
+              {rotatingCheckInCodeQuery.isLoading || rotatingCheckOutCodeQuery.isLoading ? (
                 <span>{isArabic ? "جاري تحميل الكود..." : "Loading code..."}</span>
-              ) : rotatingCodeQuery.data ? (
+              ) : rotatingCheckInCodeQuery.data || rotatingCheckOutCodeQuery.data ? (
                 <>
-                  <strong style={{ fontSize: "2rem", letterSpacing: "0.22em" }}>{rotatingCodeQuery.data.code}</strong>
+                  <span>{isArabic ? "كود الحضور" : "Check-in code"}</span>
+                  <strong style={{ fontSize: "2rem", letterSpacing: "0.22em" }}>
+                    {rotatingCheckInCodeQuery.data?.code ?? "-"}
+                  </strong>
+                  <span style={{ marginTop: 10 }}>{isArabic ? "كود الانصراف" : "Check-out code"}</span>
+                  <strong style={{ fontSize: "2rem", letterSpacing: "0.22em" }}>
+                    {rotatingCheckOutCodeQuery.data?.code ?? "-"}
+                  </strong>
                   <div className="qr-token-meta">
                     <span>
                       {isArabic ? "ينتهي في" : "Expires at"}:{" "}
-                      {new Date(rotatingCodeQuery.data.expires_at).toLocaleTimeString(isArabic ? "ar" : "en")}
+                      {new Date(
+                        rotatingCheckInCodeQuery.data?.expires_at ?? rotatingCheckOutCodeQuery.data?.expires_at ?? ""
+                      ).toLocaleTimeString(isArabic ? "ar" : "en")}
                     </span>
-                    <span>{isArabic ? "المدة" : "TTL"}: {rotatingCodeQuery.data.ttl_seconds}s</span>
+                    <span>
+                      {isArabic ? "المدة" : "TTL"}:{" "}
+                      {(rotatingCheckInCodeQuery.data?.ttl_seconds ?? rotatingCheckOutCodeQuery.data?.ttl_seconds) ?? 0}s
+                    </span>
                   </div>
-                </>
+                </>                
               ) : (
                 <span>{isArabic ? "لا يوجد كود متاح الآن." : "No active code."}</span>
               )}

@@ -54,11 +54,11 @@ export function useManualAttendanceCreate() {
   });
 }
 
-export function useRotatingAttendanceCode(enabled: boolean) {
+export function useRotatingAttendanceCode(enabled: boolean, purpose: "checkin" | "checkout") {
   return useQuery({
-    queryKey: ["attendance", "rotating-code"],
-    queryFn: getRotatingAttendanceCode,
-    enabled,
+    queryKey: ["attendance", "rotating-code", purpose],
+    queryFn: () => getRotatingAttendanceCode(purpose),
+    enabled,    
     refetchInterval: 30_000,
     refetchIntervalInBackground: true,
     staleTime: 15_000,

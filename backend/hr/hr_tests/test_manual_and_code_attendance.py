@@ -47,10 +47,10 @@ class ManualAndCodeAttendanceTests(TestCase):
         record = create_manual_attendance(
             actor=self.manager,
             payload={
+                "action": "checkin",
                 "employee": self.employee,
                 "date": timezone.localdate(now),
-                "check_in_time": now,
-                "check_out_time": now + datetime.timedelta(hours=8),
+                "time": now,                
             },
         )
         self.assertEqual(record.method, AttendanceRecord.Method.MANUAL)
@@ -59,15 +59,30 @@ class ManualAndCodeAttendanceTests(TestCase):
 
     @patch("hr.attendance.services.user_has_permission", return_value=True)
     def test_submit_code_creates_pending_record(self, _permission_mock):
-        code_payload = generate_rotating_attendance_code(actor=self.manager)
-        record = submit_code_attendance(actor=self.employee_user, code=code_payload["code"])
+        code_payload = generate_rotating_attendance_code(actor=self.manager, purpose="checkin")
+        record = submit_code_attendance(actor=self.employee_user, code=code_payload["code"], purpose="checkin")        
         self.assertEqual(record.method, AttendanceRecord.Method.CODE)
         self.assertEqual(record.check_in_approval_status, AttendanceRecord.ApprovalStatus.PENDING)
 
     def test_submit_code_rejects_expired_or_invalid_code(self):
         with self.assertRaises(ValidationError):
-            submit_code_attendance(actor=self.employee_user, code="ABC123")
+            submit_code_attendance(actor=self.employee_user, code="ABC123", purpose="checkin")
 
+    @patch("hr.attendance.services.user_has_permission", return_value=True)
+    def test_submit_checkout_code_updates_checkout_time(self, _permission_mock):
+        checkin_code = generate_rotating_attendance_code(actor=self.manager, purpose="checkin")
+        submit_code_attendance(actor=self.employee_user, code=checkin_code["code"], purpose="checkin")
+        checkout_code = generate_rotating_attendance_code(actor=self.manager, purpose="checkout")
+
+        record = submit_code_attendance(
+            actor=self.employee_user,
+            code=checkout_code["code"],
+            purpose="checkout",
+        )
+
+        self.assertIsNotNone(record.check_out_time)
+        self.assertEqual(record.check_out_approval_status, AttendanceRecord.ApprovalStatus.PENDING)
+        
     def test_payroll_filter_includes_only_approved_attendance(self):
         today = timezone.localdate()
         approved = AttendanceRecord.objects.create(

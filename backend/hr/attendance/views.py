@@ -256,9 +256,12 @@ class AttendanceViewSet(ThrottledInitialMixin, PermissionByActionMixin, CompanyS
     )
     @action(detail=False, methods=["get"], url_path="code")
     def code(self, request):
-        payload = generate_rotating_attendance_code(actor=request.user)
+        purpose = request.query_params.get("purpose", "checkin")
+        if purpose not in {"checkin", "checkout"}:
+            raise ValidationError({"purpose": "purpose must be checkin or checkout."})
+        payload = generate_rotating_attendance_code(actor=request.user, purpose=purpose)
         return Response(payload, status=status.HTTP_200_OK)
-
+    
     @extend_schema(
         tags=["Attendance"],
         summary="Submit attendance code (employee)",
@@ -269,9 +272,13 @@ class AttendanceViewSet(ThrottledInitialMixin, PermissionByActionMixin, CompanyS
     def submit_code(self, request):
         serializer = AttendanceCodeSubmitSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        attendance = submit_code_attendance(actor=request.user, code=serializer.validated_data["code"])
+        attendance = submit_code_attendance(
+            actor=request.user,
+            code=serializer.validated_data["code"],
+            purpose=serializer.validated_data["purpose"],
+        )
         return Response(AttendanceRecordSerializer(attendance).data, status=status.HTTP_201_CREATED)
-    
+        
     @extend_schema(
         tags=["Attendance"],
         summary="Approve a pending attendance action",

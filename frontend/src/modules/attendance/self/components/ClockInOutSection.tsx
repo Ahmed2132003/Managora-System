@@ -11,13 +11,17 @@ type ClockInOutSectionProps = {
   canVerify: boolean;
   isRequestPending: boolean;
   isVerifyPending: boolean;
-  codeValue: string;
-  isCodeSubmitting: boolean;
+  checkInCodeValue: string;
+  checkOutCodeValue: string;
+  isCheckInCodeSubmitting: boolean;
+  isCheckOutCodeSubmitting: boolean;  
   onRequestOtp: (purpose: AttendanceOtpPurpose) => void;
   onOtpCodeChange: (value: string) => void;
   onVerifyOtp: () => void;
-  onCodeChange: (value: string) => void;
-  onSubmitCode: () => void;
+  onCheckInCodeChange: (value: string) => void;
+  onSubmitCheckInCode: () => void;
+  onCheckOutCodeChange: (value: string) => void;
+  onSubmitCheckOutCode: () => void;  
 };
 
 export function ClockInOutSection({
@@ -30,13 +34,17 @@ export function ClockInOutSection({
   canVerify,
   isRequestPending,
   isVerifyPending,
-  codeValue,
-  isCodeSubmitting,
+  checkInCodeValue,
+  checkOutCodeValue,
+  isCheckInCodeSubmitting,
+  isCheckOutCodeSubmitting,  
   onRequestOtp,
   onOtpCodeChange,
   onVerifyOtp,
-  onCodeChange,
-  onSubmitCode,
+  onCheckInCodeChange,
+  onSubmitCheckInCode,
+  onCheckOutCodeChange,
+  onSubmitCheckOutCode,  
 }: ClockInOutSectionProps) {  
   return (
     <div className="panel">
@@ -109,20 +117,47 @@ export function ClockInOutSection({
             <span>{isArabic ? "كود الحضور" : "Attendance code"}</span>
             <input
               placeholder={isArabic ? "أدخل الكود" : "Enter rotating code"}
-              value={codeValue}
-              onChange={(event) => onCodeChange(event.currentTarget.value.toUpperCase().slice(0, 12))}
+              value={checkInCodeValue}
+              onChange={(event) => onCheckInCodeChange(event.currentTarget.value.toUpperCase().slice(0, 12))}
+            />
+          </label>
+          <label className="attendance-field">
+            <span>{isArabic ? "كود الانصراف" : "Departure code"}</span>
+            <input
+              placeholder={isArabic ? "أدخل كود الانصراف" : "Enter departure code"}
+              value={checkOutCodeValue}
+              onChange={(event) => onCheckOutCodeChange(event.currentTarget.value.toUpperCase().slice(0, 12))}
             />
           </label>
         </div>
-        <div className="attendance-actions">
-          <button type="button" className="primary-button" onClick={onSubmitCode} disabled={!codeValue || isCodeSubmitting}>
-            {isCodeSubmitting
+        <div className="attendance-actions" style={{ display: "grid", gap: 8 }}>
+          <button
+            type="button"
+            className="primary-button"
+            onClick={onSubmitCheckInCode}
+            disabled={!checkInCodeValue || isCheckInCodeSubmitting}
+          >
+            {isCheckInCodeSubmitting
               ? isArabic
                 ? "جاري الإرسال..."
                 : "Submitting..."
               : isArabic
                 ? "إرسال كود الحضور"
                 : "Submit attendance code"}
+          </button>
+          <button
+            type="button"
+            className="ghost-button"
+            onClick={onSubmitCheckOutCode}
+            disabled={!checkOutCodeValue || isCheckOutCodeSubmitting}
+          >
+            {isCheckOutCodeSubmitting
+              ? isArabic
+                ? "جاري الإرسال..."
+                : "Submitting..."
+              : isArabic
+                ? "إرسال كود الانصراف"
+                : "Submit departure code"}
           </button>
         </div>
       </div>
