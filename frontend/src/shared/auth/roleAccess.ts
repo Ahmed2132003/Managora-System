@@ -132,7 +132,7 @@ export function isPathAllowedForRole(
   }
 
   // /admin paths: superuser only, period
-  if (pathname.startsWith("/admin")) {
+  if (pathname.startsWith("/admin") || pathname.startsWith("/super-admin")) {
     return isSuperuser;
   }
 

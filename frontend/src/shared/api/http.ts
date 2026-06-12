@@ -177,12 +177,19 @@ http.interceptors.request.use(async (config) => {
   if (accessToken) {
     config.headers = config.headers ?? {};
     config.headers.Authorization = `Bearer ${accessToken}`;
+
+    // Superuser company context
+    const activeCompanyId = localStorage.getItem("superadmin_active_company_id");
+    if (activeCompanyId) {
+      config.headers["X-Company-ID"] = activeCompanyId;
+    }
+
     console.debug("[auth][request-headers]", {
       url: requestUrl,
       authorization: "Bearer <redacted>",
       headerKeys: Object.keys(config.headers),
     });
-  }
+  }  
   return config;
 });
 

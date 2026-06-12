@@ -1,3 +1,4 @@
+
 from django.utils import timezone
 from rest_framework.exceptions import AuthenticationFailed
 from rest_framework_simplejwt.authentication import JWTAuthentication
@@ -24,6 +25,7 @@ class AuditJWTAuthentication(JWTAuthentication):
                 },
             )
             raise
+
         if result:
             user, token = result
             logger.debug(
@@ -34,22 +36,37 @@ class AuditJWTAuthentication(JWTAuthentication):
                     "path": request.path,
                 },
             )
-            audit_context = get_audit_context()
-            company = getattr(user, "company", None)
-            now = timezone.now()            
-            if company and company.subscription_expires_at and company.subscription_expires_at <= now:
-                company.is_active = False
-                company.save(update_fields=["is_active"])
 
-            if company and not company.is_active:
-                raise AuthenticationFailed("Company subscription is inactive.")
+            # ── السوبريوزر: لا فحص اشتراك — هو مش مربوط بشركة ──
+            if not getattr(user, "is_superuser", False):
+                audit_context = get_audit_context()
+                company = getattr(user, "company", None)
+                now = timezone.now()
+
+                if company and company.subscription_expires_at and company.subscription_expires_at <= now:
+                    company.is_active = False
+                    company.save(update_fields=["is_active"])
+
+                if company and not company.is_active:
+                    raise AuthenticationFailed("Company subscription is inactive.")
 
             set_audit_context(
                 user=user,
-                ip_address=audit_context.ip_address if audit_context else get_client_ip(request),
-                user_agent=audit_context.user_agent if audit_context else request.META.get("HTTP_USER_AGENT"),
-                request_id=audit_context.request_id if audit_context else None,
+                ip_address=(
+                    get_audit_context().ip_address
+                    if get_audit_context()
+                    else get_client_ip(request)
+                ),
+                user_agent=(
+                    get_audit_context().user_agent
+                    if get_audit_context()
+                    else request.META.get("HTTP_USER_AGENT")
+                ),
+                request_id=(
+                    get_audit_context().request_id if get_audit_context() else None
+                ),
                 company_id=getattr(user, "company_id", None),
             )
             return user, token
+
         return result

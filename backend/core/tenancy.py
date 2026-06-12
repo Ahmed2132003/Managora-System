@@ -1,3 +1,4 @@
+
 from __future__ import annotations
 
 from django.db import models
@@ -46,8 +47,39 @@ class CompanyScopedModel(models.Model):
 class CompanyScopedViewSet(ModelViewSet):
     """
     Base class for tenant-isolated ViewSets.
-    Uses queryset scoping so cross-tenant access naturally resolves to 404.
+
+    السوبريوزر:
+      - لو بعت X-Company-ID header → يشتغل على تلك الشركة فقط.
+      - لو ماعملش → يشوف كل البيانات بدون فلتر (قيمة company = None).
+
+    المستخدم العادي:
+      - دايماً محدود بشركته.
     """
+
+    def _resolve_superuser_company(self, request):
+        """
+        يحاول يحدد الشركة التي يريد السوبريوزر العمل عليها من:
+          1. X-Company-ID request header
+          2. company_id في بيانات المستخدم (fallback)
+        يرجع Company object أو None.
+        """
+        from core.models import Company
+
+        # Header له الأولوية
+        hdr = request.META.get("HTTP_X_COMPANY_ID")
+        if hdr:
+            try:
+                company_id = int(hdr)
+                return Company.objects.filter(id=company_id).first()
+            except (TypeError, ValueError):
+                pass
+
+        # Fallback: شركة المستخدم نفسه (لو مربوط بشركة)
+        company_id = getattr(request.user, "company_id", None)
+        if company_id:
+            return Company.objects.filter(id=company_id).first()
+
+        return None  # بدون فلتر → كل الشركات
 
     def _current_company(self):
         request = getattr(self, "request", None)
@@ -55,11 +87,8 @@ class CompanyScopedViewSet(ModelViewSet):
             raise NotAuthenticated("Authentication credentials were not provided.")
 
         if request.user.is_superuser:
-            if getattr(request, "company", None):
-                return request.company
-            if getattr(request.user, "company", None):
-                return request.user.company
-            return None
+            return self._resolve_superuser_company(request)
+
         return request.user.company
 
     def get_permissions(self):
@@ -67,11 +96,12 @@ class CompanyScopedViewSet(ModelViewSet):
         if not any(isinstance(permission, RoleBasedPermission) for permission in permissions):
             permissions.append(RoleBasedPermission())
         return permissions
-    
+
     def get_queryset(self):
         queryset = super().get_queryset()
         company = self._current_company()
         if company is None:
+            # السوبريوزر بدون X-Company-ID → كل البيانات
             return queryset
         return queryset.filter(company=company)
 
@@ -84,6 +114,7 @@ class CompanyScopedViewSet(ModelViewSet):
     def perform_create(self, serializer):
         company = self._current_company()
         if company is None:
+            # السوبريوزر لازم يحدد الشركة في الـ body لو مفيش header
             serializer.save()
             return
         serializer.save(company=company)

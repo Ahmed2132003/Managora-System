@@ -45,6 +45,7 @@ class CompanyAttendanceQrToken(models.Model):
         on_delete=models.CASCADE,
         related_name="attendance_qr_tokens",
     )
+    
     issued_for = models.DateField()
     token = models.TextField(unique=True)
     valid_from = models.DateTimeField()
@@ -223,7 +224,9 @@ class User(AbstractUser):
         "core.Company",
         on_delete=models.PROTECT,
         related_name="users",
-    )
+        null=True,
+        blank=True,
+    )    
     roles = models.ManyToManyField(
         "core.Role",
         through="core.UserRole",

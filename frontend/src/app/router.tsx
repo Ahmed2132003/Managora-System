@@ -44,6 +44,7 @@ import { CatalogPage } from "../pages/catalog/CatalogPage";
 import { SalesPage } from "../pages/catalog/SalesPage.tsx";
 import { EmployeeSelfServicePage } from "../pages/accounting/employee/EmployeeSelfServicePage";
 import { MessagesPage } from "../pages/communication/MessagesPage.tsx";
+import { SuperAdminPage } from "../pages/admin/SuperAdminPage";
 
 const TrialBalancePage = lazy(() =>
   import("../pages/accounting/TrialBalancePage.tsx").then((module) => ({
@@ -173,6 +174,7 @@ export const router = createBrowserRouter([
           { index: true, element: <Navigate to="/setup/templates" replace /> },
           { path: "templates", element: <SetupTemplatesPage /> },
           { path: "progress", element: <SetupProgressPage /> },
+          { path: "super-admin", element: <SuperAdminPage /> },
         ],
       },
     ],
