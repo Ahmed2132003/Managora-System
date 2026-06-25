@@ -3,12 +3,9 @@ from rest_framework.routers import DefaultRouter
 
 from accounting.views import (
     AccountViewSet,
-    AccountMappingViewSet,
-    ApplyTemplateView,
     ARAgingReportView,
     AlertsView,
     BalanceSheetView,
-    CostCenterViewSet,    
     CustomerViewSet,
     CatalogItemViewSet,
     StockTransactionViewSet,
@@ -23,8 +20,6 @@ from accounting.views import (
 
 router = DefaultRouter()
 router.register("accounting/accounts", AccountViewSet, basename="accounting-account")
-router.register("accounting/mappings", AccountMappingViewSet, basename="accounting-mapping")
-router.register("accounting/cost-centers", CostCenterViewSet, basename="cost-center")
 router.register("customers", CustomerViewSet, basename="customer")
 router.register("invoices", InvoiceViewSet, basename="invoice")
 router.register(
@@ -37,7 +32,6 @@ router.register("inventory/transactions", StockTransactionViewSet, basename="sto
 
 urlpatterns = [
     path("", include(router.urls)),
-    path("accounting/coa/apply-template/", ApplyTemplateView.as_view(), name="coa-apply-template"),
     path("alerts/", AlertsView.as_view(), name="alerts-list"),
     path("reports/ar-aging/", ARAgingReportView.as_view(), name="report-ar-aging"),
     path("reports/trial-balance/", TrialBalanceView.as_view(), name="report-trial-balance"),    

@@ -1,21 +1,14 @@
 from calendar import monthrange
 from datetime import date
 from decimal import Decimal
-from django.core.exceptions import ValidationError as DjangoValidationError
+
 from django.db import transaction
 from django.db.models import Sum
 from rest_framework.exceptions import ValidationError
 
-from accounting.models import AccountMapping, JournalEntry, JournalLine
-from accounting.services.mappings import ensure_mapping_account
+from accounting.models import JournalEntry, JournalLine
+from accounting.services.primary_accounts import get_expense_account
 from hr.models import PayrollRun
-
-
-
-REQUIRED_PAYROLL_MAPPING_KEYS = (
-    AccountMapping.Key.PAYROLL_SALARIES_EXPENSE,
-    AccountMapping.Key.PAYROLL_PAYABLE,
-)
 
 
 def _period_end_date(period):
@@ -23,22 +16,16 @@ def _period_end_date(period):
     return date(period.year, period.month, last_day)
 
 
-def get_required_payroll_mappings(company):
-    mappings = {}
-    for key in REQUIRED_PAYROLL_MAPPING_KEYS:
-        try:
-            ensure_mapping_account(company, key)
-        except DjangoValidationError as exc:
-            raise ValidationError({"detail": exc.message}) from exc
-        mappings[key] = (
-            AccountMapping.objects.filter(company=company, key=key)
-            .select_related("account")
-            .get()
-        )
-    return mappings
-
-
 def create_payroll_journal_entry(period, actor=None):
+    """
+    يسجل أثر الرواتب على حساب EXPENSE: سطر واحد (Debit) بقيمة إجمالي
+    الرواتب الإجمالية (gross_total) للفترة. لا يوجد طرف "مستحقات رواتب"
+    (Payroll Payable) لأنه محذوف من النظام المبسط - الالتزام كان مجرد
+    Liability وهمي في هذا النظام ذو الحسابين فقط.
+
+    هذا قيد غير متوازن بقصد على مستوى القيد الواحد (نظام "الأثر الصافي")،
+    لذلك لا يمر على post_journal_entry() العامة - يُنشأ مباشرة هنا.
+    """
     company = period.company
     existing_entry = JournalEntry.objects.filter(
         company=company,
@@ -50,17 +37,13 @@ def create_payroll_journal_entry(period, actor=None):
 
     totals = PayrollRun.objects.filter(period=period).aggregate(
         gross_total=Sum("earnings_total"),
-        net_total=Sum("net_total"),
     )
     gross_total = totals["gross_total"] or Decimal("0")
-    net_total = totals["net_total"] or Decimal("0")
 
-    if gross_total <= 0 or net_total <= 0:
+    if gross_total <= 0:
         raise ValidationError({"detail": "Payroll totals must be greater than zero."})
 
-    mappings = get_required_payroll_mappings(company)
-    salaries_account = mappings[AccountMapping.Key.PAYROLL_SALARIES_EXPENSE].account
-    payable_account = mappings[AccountMapping.Key.PAYROLL_PAYABLE].account
+    expense_account = get_expense_account(company)
 
     with transaction.atomic():
         entry = JournalEntry.objects.create(
@@ -72,29 +55,16 @@ def create_payroll_journal_entry(period, actor=None):
             status=JournalEntry.Status.POSTED,
             created_by=actor,
         )
-        JournalLine.objects.bulk_create(
-            [
-                JournalLine(
-                    company=company,
-                    entry=entry,
-                    account=salaries_account,
-                    description="Payroll salaries expense",
-                    debit=gross_total,
-                    credit=Decimal("0"),
-                ),
-                JournalLine(
-                    company=company,
-                    entry=entry,
-                    account=payable_account,
-                    description="Payroll payable",
-                    debit=Decimal("0"),
-                    credit=net_total,
-                ),
-            ]
+        JournalLine.objects.create(
+            company=company,
+            entry=entry,
+            account=expense_account,
+            description="Payroll salaries expense",
+            debit=gross_total,
+            credit=Decimal("0"),
         )
 
     return entry, True
-
 
 
 def generate_payroll_journal(period, actor=None):

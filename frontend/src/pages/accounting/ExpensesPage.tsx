@@ -4,7 +4,6 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { isForbiddenError } from "../../shared/api/errors";
 import {
   useApproveExpense,
-  useCostCenters,
   useCreateExpense,
   useExpenses,
   useUploadExpenseAttachment,
@@ -179,9 +178,6 @@ type Content = {
     date: string;
     amount: string;
     vendor: string;
-    expenseAccount: string;
-    paidFromAccount: string;
-    costCenter: string;
     notes: string;
     expenseType: string;
     salaryPeriod: string;
@@ -226,7 +222,6 @@ type Content = {
     policies: string;
     hrActions: string;
     payroll: string;
-    accountingSetup: string;
     journalEntries: string;
     expenses: string;
     collections: string;
@@ -291,9 +286,6 @@ const contentMap: Record<Language, Content> = {
       date: "Date",
       amount: "Amount",
       vendor: "Vendor",
-      expenseAccount: "Expense account",
-      paidFromAccount: "Paid from account",
-      costCenter: "Cost center",
       notes: "Notes",
       expenseType: "Expense type",
       salaryPeriod: "Payroll period",
@@ -338,14 +330,13 @@ const contentMap: Record<Language, Content> = {
       policies: "Policies",
       hrActions: "HR Actions",
       payroll: "Payroll",
-      accountingSetup: "Accounting Setup",
       journalEntries: "Journal Entries",
       expenses: "Expenses",
       collections: "Collections",
       trialBalance: "Trial Balance",
       generalLedger: "General Ledger",
       profitLoss: "Profit & Loss",
-      balanceSheet: "Balance Sheet",
+      balanceSheet: "Income & Expense Summary",
       agingReport: "AR Aging",
       customers: "Customers",
       newCustomer: "New Customer",
@@ -401,9 +392,6 @@ const contentMap: Record<Language, Content> = {
       date: "التاريخ",
       amount: "القيمة",
       vendor: "المورد",
-      expenseAccount: "حساب المصروف",
-      paidFromAccount: "حساب السداد",
-      costCenter: "مركز التكلفة",
       notes: "ملاحظات",
       expenseType: "نوع المصروف",
       salaryPeriod: "فترة الرواتب",
@@ -416,11 +404,11 @@ const contentMap: Record<Language, Content> = {
       recipients: "المستفيدون",
       expenseTypeRequired: "يرجى اختيار نوع المصروف.",
       payrollPeriodRequired: "يرجى اختيار فترة الرواتب.",
-      otherDetailsRequired: "Please complete the other expense details.",
-      attachments: "Attachments",
-      cancel: "Cancel",
-      save: "Save Draft",
-      error: "Something went wrong. Please try again.",
+      otherDetailsRequired: "يرجى استكمال تفاصيل المصروف الآخر.",
+      attachments: "المرفقات",
+      cancel: "إلغاء",
+      save: "حفظ كمسودة",
+      error: "حدث خطأ ما. حاول مرة أخرى.",
     },    
     table: {
       date: "التاريخ",
@@ -448,14 +436,13 @@ const contentMap: Record<Language, Content> = {
       policies: "السياسات",
       hrActions: "إجراءات الموارد البشرية",
       payroll: "الرواتب",
-      accountingSetup: "إعداد المحاسبة",
       journalEntries: "قيود اليومية",
       expenses: "المصروفات",
       collections: "التحصيلات",
       trialBalance: "ميزان المراجعة",
       generalLedger: "دفتر الأستاذ",
       profitLoss: "الأرباح والخسائر",
-      balanceSheet: "الميزانية العمومية",
+      balanceSheet: "ملخص الإيرادات والمصروفات",
       agingReport: "أعمار الديون",
       customers: "العملاء",
       newCustomer: "عميل جديد",
@@ -511,7 +498,6 @@ export function ExpensesPage() {
   const [createOpen, setCreateOpen] = useState(false);
   const [formDate, setFormDate] = useState("");
   const [formAmount, setFormAmount] = useState<number | string>("");
-  const [costCenter, setCostCenter] = useState<string | null>(null);
   const [notes, setNotes] = useState("");
   const [formVendor, setFormVendor] = useState("");
   const [expenseType, setExpenseType] = useState<ExpenseType>("other");
@@ -566,7 +552,6 @@ export function ExpensesPage() {
   );
 
   const expensesQuery = useExpenses(filters);
-  const costCentersQuery = useCostCenters();
   const payrollPeriodsQuery = usePayrollPeriods();
   const payrollRunsQuery = usePeriodRuns(
     payrollPeriodId ? Number(payrollPeriodId) : null
@@ -580,7 +565,6 @@ export function ExpensesPage() {
   const resetForm = () => {
     setFormDate("");
     setFormAmount("");
-    setCostCenter(null);
     setNotes("");
     setFormVendor("");
     setExpenseType("other");
@@ -785,10 +769,11 @@ export function ExpensesPage() {
           ? otherExpenseName
           : formVendor || (expenseType === "salary" ? selectedPayrollPeriodLabel : "");
 
+      // expense_account لا يُرسَل بعد الآن - الباك إند يحدده تلقائيًا
+      // (حساب EXPENSE الموحد للشركة).
       const expense = await createExpense.mutateAsync({
         date: formDate,
         amount: effectiveAmount,
-        cost_center: costCenter ? Number(costCenter) : null,
         notes: expenseDetails,
         vendor_name: resolvedVendorName,
         category: expenseType,
@@ -809,11 +794,6 @@ export function ExpensesPage() {
       setCreateOpen(false);
     },
   });
-
-  const costCenterOptions = (costCentersQuery.data ?? []).map((center) => ({
-    value: String(center.id),
-    label: `${center.code} - ${center.name}`,
-  }));
 
   const totalExpenses = expensesQuery.data?.length ?? 0;
   const approvedExpenses =
@@ -908,12 +888,6 @@ export function ExpensesPage() {
         label: content.nav.payroll,
         icon: "💸",
         permissions: ["hr.payroll.view", "hr.payroll.*"],
-      },
-      {
-        path: "/accounting/setup",
-        label: content.nav.accountingSetup,
-        icon: "⚙️",
-        permissions: ["accounting.manage_coa", "accounting.*"],
       },
       {
         path: "/accounting/journal-entries",
@@ -1043,10 +1017,7 @@ export function ExpensesPage() {
     });
   }, [allowedRolePaths, appRole, navLinks, userPermissions]);
 
-  if (
-    isForbiddenError(expensesQuery.error) ||
-    isForbiddenError(costCentersQuery.error)
-  ) {
+  if (isForbiddenError(expensesQuery.error)) {
     return <AccessDenied />;
   }
 
@@ -1444,22 +1415,6 @@ export function ExpensesPage() {
                     </label>
                   </>
                 )}
-                <label className="field">
-                  <span>{content.form.costCenter}</span>
-                  <select
-                    value={costCenter ?? ""}
-                    onChange={(event) => setCostCenter(event.target.value || null)}
-                  >
-                    <option value="">
-                      {isArabic ? "اختياري" : "Optional"}
-                    </option>
-                    {costCenterOptions.map((option) => (
-                      <option key={option.value} value={option.value}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </select>
-                </label>
                 <label className="field field--full">
                   <span>{content.form.notes}</span>
                   <textarea

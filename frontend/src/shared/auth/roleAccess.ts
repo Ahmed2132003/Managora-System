@@ -49,7 +49,9 @@ const ROLE_ALLOWED_PATHS: Record<
     "/leaves/request",
     "/leaves/my",
     // Accounting module
-    "/accounting/setup",
+    // ملاحظة (Phase 7 - تبسيط نظام الحسابات): تم حذف "/accounting/setup"
+    // بالكامل من هنا. الحسابان (INCOME/EXPENSE) يُنشآن تلقائيًا عند تكوين
+    // الشركة، فلا حاجة لشاشة إعداد محاسبي يدوية بعد الآن.
     "/accounting/journal-entries",
     "/accounting/expenses",
     "/collections",

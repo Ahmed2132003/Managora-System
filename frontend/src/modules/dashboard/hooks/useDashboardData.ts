@@ -3,7 +3,7 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { useAlerts } from "../../../shared/analytics/hooks";
 import { useAnalyticsKpis } from "../../../shared/analytics/insights";
 import { useCashForecast } from "../../../shared/analytics/forecast";
-import { useAccountMappings, useGeneralLedger, useProfitLoss } from "../../../shared/accounting/hooks";
+import { useAccounts, useGeneralLedger, useProfitLoss } from "../../../shared/accounting/hooks";
 import { useAttendanceRecordsQuery } from "../../../shared/hr/hooks";
 import { endpoints } from "../../../shared/api/endpoints";
 import { http } from "../../../shared/api/http";
@@ -89,17 +89,18 @@ export function useDashboardData(content: Content, isArabic: boolean) {
 
   // ── Finance queries (gated) ───────────────────────────────────────────────
   const profitLossQuery      = useProfitLoss(canFinance ? dateFrom : "", canFinance ? dateTo : "");
-  const accountMappingsQuery = useAccountMappings();
-  const cashAccountId = useMemo(() => {
+
+  // ملاحظة (Phase 7 - تبسيط نظام الحسابات): لا يوجد حساب "Cash" منفصل بعد
+  // الآن (AccountMapping محذوف بالكامل). دفتر الأستاذ هنا يعرض حركة حساب
+  // INCOME (أقرب مكافئ متاح لمتابعة "الرصيد التراكمي" في النظام المبسط).
+  const accountsQuery = useAccounts();
+  const incomeAccountId = useMemo(() => {
     if (!canFinance) return undefined;
-    const cashMapping = (accountMappingsQuery.data ?? []).find((m) =>
-      ["payment_cash", "cash", "cash_on_hand"].includes(m.key),
-    );
-    return cashMapping?.account ?? undefined;
-  }, [accountMappingsQuery.data, canFinance]);
+    return accountsQuery.data?.find((account) => account.type === "INCOME")?.id;
+  }, [accountsQuery.data, canFinance]);
 
   const cashLedgerQuery = useGeneralLedger(
-    canFinance ? cashAccountId : undefined,
+    canFinance ? incomeAccountId : undefined,
     canFinance ? dateFrom : "",
     canFinance ? dateTo   : "",
   );

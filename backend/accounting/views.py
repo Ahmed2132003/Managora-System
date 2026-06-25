@@ -17,9 +17,7 @@ from django.db import transaction
 
 from accounting.models import (
     Account,
-    AccountMapping,
     Alert,
-    CostCenter,
     Customer,
     Expense,
     Invoice,
@@ -33,10 +31,6 @@ from accounting.models import (
 
 from accounting.serializers import (
     AccountSerializer,
-    AccountMappingBulkSetSerializer,
-    AccountMappingSerializer,
-    ApplyTemplateSerializer,
-    CostCenterSerializer,
     CustomerSerializer,
     ExpenseAttachmentCreateSerializer,
     ExpenseAttachmentSerializer,
@@ -52,8 +46,7 @@ from accounting.services.expenses import ensure_expense_journal_entry
 from accounting.services.invoices import ensure_invoice_journal_entry
 from accounting.services.alerts import generate_alerts
 from accounting.services.receivables import get_open_invoices
-from accounting.services.seed import seed_coa_template
-from accounting.services.mappings import ensure_mapping_account
+from accounting.services.primary_accounts import get_expense_account
 from accounting.services.payments import record_payment
 from core.permissions import HasPermission, PermissionByActionMixin, user_has_permission
 
@@ -75,51 +68,22 @@ def _parse_date_param(request, param_name):
 @extend_schema_view(
     list=extend_schema(tags=["Accounts"], summary="List accounts"),
     retrieve=extend_schema(tags=["Accounts"], summary="Retrieve account"),
-    create=extend_schema(tags=["Accounts"], summary="Create account"),
-    partial_update=extend_schema(tags=["Accounts"], summary="Update account"),
 )
-class AccountViewSet(PermissionByActionMixin, viewsets.ModelViewSet):
+class AccountViewSet(PermissionByActionMixin, viewsets.ReadOnlyModelViewSet):
+    """
+    حسابا الشركة (INCOME و EXPENSE) ثابتان وتلقائيان بالكامل - يُنشآن عبر
+    signal عند إنشاء الشركة (انظر accounting/signals.py). لا يوجد إنشاء أو
+    تعديل أو حذف يدوي لهما، فقط عرض.
+    """
     serializer_class = AccountSerializer
     permission_classes = [IsAuthenticated]
     permission_map = {
         "list": "accounting.view",
         "retrieve": "accounting.view",
-        "create": "accounting.manage_coa",
-        "partial_update": "accounting.manage_coa",
-        "update": "accounting.manage_coa",
-        "destroy": "accounting.manage_coa",
     }
 
     def get_queryset(self):
         return Account.objects.filter(company=self.request.user.company)
-
-    def perform_create(self, serializer):
-        serializer.save(company=self.request.user.company)
-
-
-@extend_schema_view(
-    list=extend_schema(tags=["Cost Centers"], summary="List cost centers"),
-    retrieve=extend_schema(tags=["Cost Centers"], summary="Retrieve cost center"),
-    create=extend_schema(tags=["Cost Centers"], summary="Create cost center"),
-    partial_update=extend_schema(tags=["Cost Centers"], summary="Update cost center"),
-)
-class CostCenterViewSet(PermissionByActionMixin, viewsets.ModelViewSet):
-    serializer_class = CostCenterSerializer
-    permission_classes = [IsAuthenticated]
-    permission_map = {
-        "list": "accounting.view",
-        "retrieve": "accounting.view",
-        "create": "accounting.manage_coa",
-        "partial_update": "accounting.manage_coa",
-        "update": "accounting.manage_coa",
-        "destroy": "accounting.manage_coa",
-    }
-
-    def get_queryset(self):
-        return CostCenter.objects.filter(company=self.request.user.company)
-
-    def perform_create(self, serializer):
-        serializer.save(company=self.request.user.company)
 
 
 @extend_schema_view(
@@ -166,94 +130,17 @@ class CustomerViewSet(PermissionByActionMixin, viewsets.ModelViewSet):
 
 
 @extend_schema_view(
-    list=extend_schema(tags=["Account Mapping"], summary="List account mappings"),
-    retrieve=extend_schema(tags=["Account Mapping"], summary="Retrieve account mapping"),
-    create=extend_schema(tags=["Account Mapping"], summary="Create account mapping"),
-    partial_update=extend_schema(tags=["Account Mapping"], summary="Update account mapping"),
-)
-class AccountMappingViewSet(PermissionByActionMixin, viewsets.ModelViewSet):
-    serializer_class = AccountMappingSerializer
-    permission_classes = [IsAuthenticated]
-    permission_map = {
-        "list": "accounting.view",
-        "retrieve": "accounting.view",
-        "create": "accounting.manage_coa",
-        "partial_update": "accounting.manage_coa",
-        "update": "accounting.manage_coa",
-        "bulk_set": "accounting.manage_coa",
-    }
-
-    def get_queryset(self):
-        return AccountMapping.objects.filter(company=self.request.user.company).select_related(
-            "account"
-        )
-
-    def perform_create(self, serializer):
-        serializer.save(company=self.request.user.company)
-
-    @action(detail=False, methods=["post"], url_path="bulk-set")
-    def bulk_set(self, request):
-        serializer = AccountMappingBulkSetSerializer(data={"mappings": request.data})
-        serializer.is_valid(raise_exception=True)
-        mappings = serializer.validated_data["mappings"]
-        company = request.user.company
-
-        account_ids = {account_id for account_id in mappings.values() if account_id}
-        accounts = {
-            account.id: account
-            for account in Account.objects.filter(company=company, id__in=account_ids)
-        }
-        if len(accounts) != len(account_ids):
-            return Response(
-                {"detail": "Account must belong to the same company."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        updated = []
-        for key, account_id in mappings.items():
-            required = key in AccountMapping.REQUIRED_KEYS
-            account = accounts.get(account_id) if account_id else None
-            if required and not account:
-                return Response(
-                    {"detail": f"Mapping {key} is required."},
-                    status=status.HTTP_400_BAD_REQUEST,
-                )
-            mapping, _ = AccountMapping.objects.update_or_create(
-                company=company,
-                key=key,
-                defaults={"account": account, "required": required},
-            )
-            updated.append(mapping)
-
-        output = AccountMappingSerializer(updated, many=True, context={"request": request})
-        return Response(output.data, status=status.HTTP_200_OK)
-
-
-@extend_schema(tags=["Chart of Accounts"], summary="Apply COA template")
-class ApplyTemplateView(APIView):
-    permission_classes = [IsAuthenticated]
-
-    def get_permissions(self):
-        permissions = super().get_permissions()
-        permissions.append(HasPermission("accounting.manage_coa"))
-        return permissions
-    
-    def post(self, request):
-        serializer = ApplyTemplateSerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        result = seed_coa_template(
-            company=request.user.company,
-            template_key=serializer.validated_data["template_key"],
-        )
-        return Response(result, status=status.HTTP_201_CREATED)
-
-
-@extend_schema_view(
     list=extend_schema(tags=["Journal Entries"], summary="List journal entries"),
     retrieve=extend_schema(tags=["Journal Entries"], summary="Retrieve journal entry"),
     create=extend_schema(tags=["Journal Entries"], summary="Create journal entry"),
 )
 class JournalEntryViewSet(PermissionByActionMixin, viewsets.ModelViewSet):
+    """
+    create() هنا يبقى الطريق الوحيد للقيود اليدوية المتوازنة (Manual Journal
+    Entry) بين INCOME و EXPENSE - عبر post_journal_entry(). القيود الناتجة
+    تلقائيًا من فواتير/مصروفات/رواتب لا تُنشأ من هنا (انظر Phase 4: invoices.py,
+    expenses.py, payroll_journal.py تنشئ JournalEntry مباشرة).
+    """
     serializer_class = JournalEntrySerializer
     permission_classes = [IsAuthenticated]
     permission_map = {
@@ -269,7 +156,7 @@ class JournalEntryViewSet(PermissionByActionMixin, viewsets.ModelViewSet):
         queryset = (
             JournalEntry.objects.filter(company=self.request.user.company)
             .select_related("created_by")
-            .prefetch_related("lines__account", "lines__cost_center")
+            .prefetch_related("lines__account")
         )
 
         date_from = parse_date(self.request.query_params.get("date_from") or "")
@@ -383,9 +270,6 @@ class InvoiceViewSet(PermissionByActionMixin, viewsets.ModelViewSet):
         tax_amount = Decimal(str(request.data.get("tax_amount", "0")))
         amount_paid = Decimal(str(request.data.get("amount_paid", "0")))
         notes = request.data.get("notes", "")
-        expense_account_id = request.data.get("expense_account")
-        paid_from_account_id = request.data.get("paid_from_account")
-        cost_center_id = request.data.get("cost_center")
         payment_method = request.data.get("payment_method", "auto")
         expense_vendor_name = request.data.get("expense_vendor_name", "")
 
@@ -505,22 +389,12 @@ class InvoiceViewSet(PermissionByActionMixin, viewsets.ModelViewSet):
                         created_by=request.user,
                     )
                     
-                # direct expense recognition for cost price
+                # تكلفة البضاعة المباعة (COGS) - مصروف فعلي مستقل، حساب
+                # EXPENSE الموحّد يُحدَّد تلقائيًا دائمًا (لا يوجد اختيار
+                # يدوي لحساب التكلفة أو حساب الدفع بعد الآن).
                 cogs_amount = sum((line["quantity"] * line["item"].cost_price for line in parsed_lines), Decimal("0"))                
                 if cogs_amount > 0:
-                    cogs_account = (
-                        Account.objects.filter(company=request.user.company, id=expense_account_id).first()
-                        if expense_account_id
-                        else ensure_mapping_account(request.user.company, AccountMapping.Key.SALES_COGS_EXPENSE)
-                    )
-                    cash_account = (
-                        Account.objects.filter(company=request.user.company, id=paid_from_account_id).first()
-                        if paid_from_account_id
-                        else ensure_mapping_account(request.user.company, AccountMapping.Key.EXPENSE_DEFAULT_CASH)
-                    )
-                    cost_center = None
-                    if cost_center_id:
-                        cost_center = CostCenter.objects.filter(company=request.user.company, id=cost_center_id).first()
+                    cogs_account = get_expense_account(request.user.company)
                     line_types = {line["item"].item_type for line in parsed_lines}
                     is_service_only = line_types == {CatalogItem.ItemType.SERVICE}
                     category = "إعلانات" if is_service_only else "تكلفة شراء منتج"
@@ -532,10 +406,8 @@ class InvoiceViewSet(PermissionByActionMixin, viewsets.ModelViewSet):
                         category=category,                        
                         amount=cogs_amount,
                         currency="",
-                        payment_method=payment_method,                        
-                        paid_from_account=cash_account,
+                        payment_method=payment_method,
                         expense_account=cogs_account,
-                        cost_center=cost_center,
                         notes=f"{category} - linked to invoice {invoice.invoice_number}",                        
                         status=Expense.Status.APPROVED,
                         created_by=request.user,
@@ -543,7 +415,6 @@ class InvoiceViewSet(PermissionByActionMixin, viewsets.ModelViewSet):
                     ensure_expense_journal_entry(expense)
 
                 if amount_paid > 0:
-                    cash_account = ensure_mapping_account(request.user.company, AccountMapping.Key.EXPENSE_DEFAULT_CASH)
                     payment = Payment.objects.create(
                         company=request.user.company,
                         customer=customer,
@@ -551,7 +422,6 @@ class InvoiceViewSet(PermissionByActionMixin, viewsets.ModelViewSet):
                         payment_date=issue_date,
                         amount=amount_paid,
                         method=Payment.Method.CASH,
-                        cash_account=cash_account,
                         notes="Auto payment while recording sale",
                         created_by=request.user,
                     )
@@ -611,9 +481,7 @@ class ExpenseViewSet(PermissionByActionMixin, viewsets.ModelViewSet):
         queryset = (
             Expense.objects.filter(company=self.request.user.company)
             .select_related(
-                "paid_from_account",
                 "expense_account",
-                "cost_center",
                 "created_by",
             )
         )        
@@ -705,7 +573,7 @@ class PaymentViewSet(PermissionByActionMixin, viewsets.ModelViewSet):
 
     def get_queryset(self):
         queryset = Payment.objects.filter(company=self.request.user.company).select_related(
-            "customer", "invoice", "cash_account", "created_by"
+            "customer", "invoice", "created_by"
         )
         customer_id = self.request.query_params.get("customer")
         if customer_id:
@@ -923,8 +791,20 @@ class AlertsView(APIView):
         return Response(data, status=status.HTTP_200_OK)
 
 
+# ==========================================================================
+# PHASE 6 — تبسيط التقارير. الأربعة تقارير التالية تعمل الآن فقط على حسابين
+# (INCOME, EXPENSE) بدلاً من شجرة حسابات كاملة. كل الإشارات لـ account__code/
+# account__name/cost_center (محذوفة من الموديلات في Phase 1) أُزيلت بالكامل.
+# ==========================================================================
+
 @extend_schema(tags=["Reports"], summary="Trial balance")
 class TrialBalanceView(APIView):
+    """
+    بما أن النظام يحتوي فقط على حسابي INCOME/EXPENSE، أصبح Trial Balance
+    تقريرًا بسيطًا بعنصرين فقط: رصيد كل حساب (net = debit - credit) خلال
+    الفترة المطلوبة. group by أصبح على account__type بدل account__code
+    (المحذوف).
+    """
     permission_classes = [IsAuthenticated]
 
     def get_permissions(self):
@@ -953,7 +833,7 @@ class TrialBalanceView(APIView):
                 entry__date__gte=date_from,
                 entry__date__lte=date_to,
             )
-            .values("account_id", "account__code", "account__name", "account__type")
+            .values("account_id", "account__type")
             .annotate(
                 debit=Coalesce(
                     Sum("debit"), Value(0), output_field=DecimalField(max_digits=14, decimal_places=2)
@@ -962,7 +842,7 @@ class TrialBalanceView(APIView):
                     Sum("credit"), Value(0), output_field=DecimalField(max_digits=14, decimal_places=2)
                 ),
             )
-            .order_by("account__code")
+            .order_by("account__type")
         )
 
         data = []
@@ -984,8 +864,6 @@ class TrialBalanceView(APIView):
             data.append(
                 {
                     "account_id": row["account_id"],
-                    "code": row["account__code"],
-                    "name": row["account__name"],
                     "type": row["account__type"],
 
                     # ✅ balances (what the page should display)
@@ -1004,6 +882,11 @@ class TrialBalanceView(APIView):
 
 @extend_schema(tags=["Reports"], summary="General ledger")
 class GeneralLedgerView(APIView):
+    """
+    account_id الممرر هنا دائمًا أحد حسابي الشركة فقط (INCOME أو EXPENSE).
+    منطق running_balance لم يتغير - فقط أُزيلت كل إشارة لـ cost_center
+    (محذوف من JournalLine) وaccount.code/account.name (محذوفان من Account).
+    """
     permission_classes = [IsAuthenticated]
 
     def get_permissions(self):
@@ -1038,7 +921,7 @@ class GeneralLedgerView(APIView):
                 entry__date__gte=date_from,
                 entry__date__lte=date_to,
             )
-            .select_related("entry", "cost_center")
+            .select_related("entry")
             .order_by("entry__date", "id")
         )
 
@@ -1056,15 +939,6 @@ class GeneralLedgerView(APIView):
                     "memo": line.entry.memo,
                     "reference_type": line.entry.reference_type,
                     "reference_id": line.entry.reference_id,
-                    "cost_center": (
-                        {
-                            "id": line.cost_center.id,
-                            "code": line.cost_center.code,
-                            "name": line.cost_center.name,
-                        }
-                        if line.cost_center
-                        else None
-                    ),
                     "running_balance": _format_amount(running_balance),
                 }
             )
@@ -1073,8 +947,6 @@ class GeneralLedgerView(APIView):
             {
                 "account": {
                     "id": account.id,
-                    "code": account.code,
-                    "name": account.name,
                     "type": account.type,
                 },
                 "lines": lines,
@@ -1085,6 +957,14 @@ class GeneralLedgerView(APIView):
 
 @extend_schema(tags=["Reports"], summary="Profit and loss")
 class ProfitLossView(APIView):
+    """
+    بسيط ومباشر الآن: حساب واحد INCOME وحساب واحد EXPENSE فقط، بدون أي
+    تقسيمات فرعية. حُذف بالكامل قسم "Cash-basis revenue support" الذي كان
+    يجمع Payment.amount كإيراد إضافي - الإيراد الفعلي يُسجَّل بالكامل في
+    JournalLine عند issue الفاتورة (انظر Phase 4: invoices.py)، فإضافة
+    قيمة الدفعات هنا كانت ستؤدي لاحتساب الإيراد مرتين (نفس المنطق المتفق
+    عليه في قرار Payment بدون قيد محاسبي في Phase 4).
+    """
     permission_classes = [IsAuthenticated]
 
     def get_permissions(self):
@@ -1093,10 +973,6 @@ class ProfitLossView(APIView):
         return permissions
 
     def get(self, request):
-        def _is_income_type(account_type: str | None) -> bool:
-            normalized = (account_type or "").upper()
-            return normalized in {Account.Type.INCOME, "REVENUE"}
-
         date_from = _parse_date_param(request, "date_from")
         date_to = _parse_date_param(request, "date_to")
         if not date_from or not date_to:
@@ -1117,12 +993,7 @@ class ProfitLossView(APIView):
                 entry__date__gte=date_from,
                 entry__date__lte=date_to,
             )
-            .filter(
-                Q(account__type=Account.Type.EXPENSE)
-                | Q(account__type=Account.Type.INCOME)
-                | Q(account__type__iexact="REVENUE")                
-            )
-            .values("account_id", "account__code", "account__name", "account__type")
+            .values("account_id", "account__type")
             .annotate(
                 debit=Coalesce(
                     Sum("debit"), Value(0), output_field=DecimalField(max_digits=14, decimal_places=2)
@@ -1131,11 +1002,10 @@ class ProfitLossView(APIView):
                     Sum("credit"), Value(0), output_field=DecimalField(max_digits=14, decimal_places=2)
                 ),
             )
-            .order_by("account__code")
         )
 
-        income_accounts = []
-        expense_accounts = []
+        income_account = None
+        expense_account = None
         income_total = Decimal("0")
         expense_total = Decimal("0")
 
@@ -1143,65 +1013,27 @@ class ProfitLossView(APIView):
             debit = Decimal(row["debit"])
             credit = Decimal(row["credit"])
             account_type = row["account__type"]
-            is_income = _is_income_type(account_type)
-            if is_income:                
+
+            if account_type == Account.Type.INCOME:
                 net = credit - debit
                 income_total += net
+                income_account = {
+                    "account_id": row["account_id"],
+                    "type": Account.Type.INCOME,
+                    "debit": _format_amount(debit),
+                    "credit": _format_amount(credit),
+                    "net": _format_amount(net),
+                }
             else:
                 net = debit - credit
                 expense_total += net
-
-            item = {
-                "account_id": row["account_id"],
-                "code": row["account__code"],
-                "name": row["account__name"],
-                "type": Account.Type.INCOME if is_income else Account.Type.EXPENSE,                
-                "debit": _format_amount(debit),
-                "credit": _format_amount(credit),
-                "net": _format_amount(net),
-            }
-            if is_income:                
-                income_accounts.append(item)
-            else:
-                expense_accounts.append(item)
-        # Cash-basis revenue support:
-        # include collected invoice payments within the selected period so
-        # finance users can track realized cash/bank sales in P&L.
-        payment_revenue_rows = (
-            Payment.objects.filter(
-                company=request.user.company,
-                payment_date__gte=date_from,
-                payment_date__lte=date_to,
-            )
-            .values("method")
-            .annotate(
-                total=Coalesce(
-                    Sum("amount"),
-                    Value(0),
-                    output_field=DecimalField(max_digits=14, decimal_places=2),
-                )
-            )
-            .order_by("method")
-        )
-        for row in payment_revenue_rows:
-            total = Decimal(row["total"])
-            if total <= 0:
-                continue
-            method = row["method"]
-            method_label = "Cash" if method == Payment.Method.CASH else "Bank"
-            code = "PAYMENT-CASH" if method == Payment.Method.CASH else "PAYMENT-BANK"
-            income_total += total
-            income_accounts.append(
-                {
-                    "account_id": None,
-                    "code": code,
-                    "name": f"Collected Sales ({method_label})",
-                    "type": Account.Type.INCOME,
-                    "debit": _format_amount(0),
-                    "credit": _format_amount(total),
-                    "net": _format_amount(total),
+                expense_account = {
+                    "account_id": row["account_id"],
+                    "type": Account.Type.EXPENSE,
+                    "debit": _format_amount(debit),
+                    "credit": _format_amount(credit),
+                    "net": _format_amount(net),
                 }
-            )
 
         net_profit = income_total - expense_total
 
@@ -1212,15 +1044,33 @@ class ProfitLossView(APIView):
                 "income_total": _format_amount(income_total),
                 "expense_total": _format_amount(expense_total),
                 "net_profit": _format_amount(net_profit),
-                "income_accounts": income_accounts,
-                "expense_accounts": expense_accounts,
+                "income_account": income_account,
+                "expense_account": expense_account,
             },
             status=status.HTTP_200_OK,
         )
 
 
-@extend_schema(tags=["Reports"], summary="Balance sheet")
+@extend_schema(tags=["Reports"], summary="Cumulative balance summary")
 class BalanceSheetView(APIView):
+    """
+    تحويل جوهري (قرار معتمد رسميًا في Phase 6): الـ endpoint القديم كان
+    يحاكي Balance Sheet كلاسيكي (Assets = Liabilities + Equity) بشكل غير
+    منطقي محاسبيًا حتى في النظام السابق (كان يسمي INCOME/EXPENSE بـ
+    assets/liabilities). في النظام المبسط بحسابين فقط، لا معنى لمصطلحات
+    Assets/Liabilities/Equity على الإطلاق.
+
+    الـ endpoint أصبح تقرير "ملخص تراكمي" (Cumulative Balance Summary):
+    إجمالي INCOME التراكمي حتى as_of، إجمالي EXPENSE التراكمي حتى as_of،
+    والفارق (صافي الرصيد التراكمي منذ تأسيس الشركة وحتى التاريخ المطلوب).
+    هذا هو المعنى المنطقي الوحيد القابل للتطبيق بهذا الاسم في نظام بحسابين.
+
+    اسم الكلاس (BalanceSheetView) ومسار الـ route (reports/balance-sheet/)
+    أُبقيا كما هما لتفادي كسر أي استدعاء موجود من الفرونت إند بشكل غير
+    ضروري في هذا الـ Phase (التغيير الكامل للمسار/الاسم إن رغب فيه أحمد
+    يمكن تأجيله لـ Phase 7 عند تحديث الواجهة، إذ سيحتاج تنسيقًا متزامنًا
+    مع تسمية الصفحة BalanceSheetPage.tsx على أي حال).
+    """
     permission_classes = [IsAuthenticated]
 
     def get_permissions(self):
@@ -1241,9 +1091,8 @@ class BalanceSheetView(APIView):
                 company=request.user.company,
                 entry__status=JournalEntry.Status.POSTED,
                 entry__date__lte=as_of,
-                account__type__in=[Account.Type.EXPENSE, Account.Type.INCOME],                
             )
-            .values("account_id", "account__code", "account__name", "account__type")
+            .values("account__type")
             .annotate(
                 debit=Coalesce(
                     Sum("debit"), Value(0), output_field=DecimalField(max_digits=14, decimal_places=2)
@@ -1252,50 +1101,27 @@ class BalanceSheetView(APIView):
                     Sum("credit"), Value(0), output_field=DecimalField(max_digits=14, decimal_places=2)
                 ),
             )
-            .order_by("account__code")
         )
 
-        income_accounts = []
-        expense_accounts = []
         income_total = Decimal("0")
         expense_total = Decimal("0")
-        
+
         for row in rows:
             debit = Decimal(row["debit"])
             credit = Decimal(row["credit"])
-            account_type = row["account__type"]
-            if account_type == Account.Type.INCOME:                
-                balance = credit - debit
-                income_total += balance                
+            if row["account__type"] == Account.Type.INCOME:
+                income_total = credit - debit
             else:
-                balance = debit - credit
-                expense_total += balance
-                
-            item = {
-                "account_id": row["account_id"],
-                "code": row["account__code"],
-                "name": row["account__name"],
-                "balance": _format_amount(balance),
-            }
-            if account_type == Account.Type.INCOME:
-                income_accounts.append(item)                
-            else:
-                expense_accounts.append(item)
-                
-        net_result = income_total - expense_total
-        
+                expense_total = debit - credit
+
+        net_balance = income_total - expense_total
+
         return Response(
             {
                 "as_of": as_of.isoformat(),
-                "assets": income_accounts,
-                "liabilities": expense_accounts,
-                "equity": [],                
-                "totals": {
-                    "assets_total": _format_amount(income_total),
-                    "liabilities_total": _format_amount(expense_total),
-                    "equity_total": _format_amount(net_result),
-                    "liabilities_equity_total": _format_amount(income_total),                    
-                },
+                "cumulative_income": _format_amount(income_total),
+                "cumulative_expense": _format_amount(expense_total),
+                "net_balance": _format_amount(net_balance),
             },
             status=status.HTTP_200_OK,
         )

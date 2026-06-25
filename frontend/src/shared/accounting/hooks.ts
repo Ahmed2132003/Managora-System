@@ -6,15 +6,8 @@ export type JournalLine = {
   id: number;
   account: {
     id: number;
-    code: string;
-    name: string;
     type: string;
   };
-  cost_center: {
-    id: number;
-    code: string;
-    name: string;
-  } | null;
   description: string;
   debit: string;
   credit: string;
@@ -35,7 +28,6 @@ export type JournalEntry = {
 
 export type JournalEntryLinePayload = {
   account: number;
-  cost_center?: number | null;
   description?: string;
   debit: string;
   credit: string;
@@ -57,28 +49,13 @@ export type JournalEntryFilters = {
   search?: string;
 };
 
+// النظام المبسط: حساب واحد فقط من كل نوع (INCOME / EXPENSE) لكل شركة،
+// يُنشآن تلقائيًا. لا يوجد code/name بعد الآن - فقط type.
 export type Account = {
   id: number;
-  code: string;
-  name: string;
-  type: string;
-};
-
-export type AccountMapping = {
-  id: number;
-  key: string;
-  account: number | null;
-  account_name?: string;
-  account_code?: string;
-  required: boolean;
+  type: "INCOME" | "EXPENSE";
   created_at?: string;
   updated_at?: string;
-};
-
-export type CostCenter = {
-  id: number;
-  code: string;
-  name: string;
 };
 
 export function useJournalEntries(filters: JournalEntryFilters) {    
@@ -159,26 +136,6 @@ export function useAccounts() {
   });
 }
 
-export function useAccountMappings() {
-  return useQuery({
-    queryKey: ["account-mappings"],
-    queryFn: async () => {
-      const response = await http.get<AccountMapping[]>(endpoints.accounting.mappings);
-      return response.data;
-    },
-  });
-}
-
-export function useCostCenters() {
-  return useQuery({
-    queryKey: ["cost-centers"],
-    queryFn: async () => {
-      const response = await http.get<CostCenter[]>(endpoints.accounting.costCenters);
-      return response.data;
-    },
-  });
-}
-
 export type Expense = {
   id: number;
   date: string;
@@ -187,9 +144,7 @@ export type Expense = {
   amount: string;
   currency: string;
   payment_method: string;
-  paid_from_account: number;
   expense_account: number;
-  cost_center: number | null;
   notes: string;
   status: "draft" | "approved";
   created_by: number | null;
@@ -238,12 +193,11 @@ export function useExpenses(filters: ExpenseFilters) {
   });
 }
 
+// expense_account لا يُرسَل من الفرونت إند بعد الآن - الباك إند يحدده
+// تلقائيًا دائمًا (حساب EXPENSE الموحد للشركة).
 export type ExpensePayload = {
   date: string;
   amount: string;
-  expense_account?: number;
-  paid_from_account?: number;  
-  cost_center?: number | null;
   vendor_name?: string;
   category?: string;
   currency?: string;
@@ -278,19 +232,19 @@ export type Payment = {
   payment_date: string;
   amount: string;
   method: "cash" | "bank";
-  cash_account: number;
   notes: string;
   created_by: number | null;
   created_at: string;
 };
 
+// cash_account لم يعد موجودًا - الدفعة لا تنتج أي قيد محاسبي، فقط تتبع
+// تحصيل مقابل فاتورة (انظر Phase 4: accounting/services/payments.py).
 export type PaymentPayload = {
   customer: number;
   invoice?: number | null;
   payment_date: string;
   amount: string;
   method: "cash" | "bank";
-  cash_account: number;
   notes?: string;
 };
 
@@ -320,13 +274,16 @@ export function useUploadExpenseAttachment() {
   });
 }
 
+// التقارير المبسطة (Phase 6): تعمل فقط على حسابي INCOME/EXPENSE.
+
 export type TrialBalanceRow = {
   account_id: number;
-  code: string;
-  name: string;
-  type: string;
+  type: "INCOME" | "EXPENSE";
   debit: string;
   credit: string;
+  debit_total: string;
+  credit_total: string;
+  net: string;
 };
 
 export type GeneralLedgerLine = {
@@ -338,20 +295,17 @@ export type GeneralLedgerLine = {
   memo: string;
   reference_type: string;
   reference_id: string | null;
-  cost_center: { id: number; code: string; name: string } | null;
   running_balance: string;
 };
 
 export type GeneralLedgerResponse = {
-  account: Account;
+  account: { id: number; type: "INCOME" | "EXPENSE" };
   lines: GeneralLedgerLine[];
 };
 
-export type ProfitLossAccount = {
+export type ProfitLossAccountSummary = {
   account_id: number;
-  code: string;
-  name: string;
-  type: string;
+  type: "INCOME" | "EXPENSE";
   debit: string;
   credit: string;
   net: string;
@@ -363,28 +317,16 @@ export type ProfitLossResponse = {
   income_total: string;
   expense_total: string;
   net_profit: string;
-  income_accounts: ProfitLossAccount[];
-  expense_accounts: ProfitLossAccount[];
+  income_account: ProfitLossAccountSummary | null;
+  expense_account: ProfitLossAccountSummary | null;
 };
 
-export type BalanceSheetLine = {
-  account_id: number | null;
-  code: string;
-  name: string;
-  balance: string;
-};
-
-export type BalanceSheetResponse = {
+// شكل جديد كليًا (Phase 6): ملخص تراكمي بدل Assets/Liabilities/Equity.
+export type CumulativeBalanceSummary = {
   as_of: string;
-  assets: BalanceSheetLine[];
-  liabilities: BalanceSheetLine[];
-  equity: BalanceSheetLine[];
-  totals: {
-    assets_total: string;
-    liabilities_total: string;
-    equity_total: string;
-    liabilities_equity_total: string;
-  };
+  cumulative_income: string;
+  cumulative_expense: string;
+  net_balance: string;
 };
 
 export type AgingBuckets = {
@@ -467,16 +409,16 @@ export function useProfitLoss(dateFrom?: string, dateTo?: string) {
   });
 }
 
-export function useBalanceSheet(asOf?: string) {
+export function useCumulativeBalanceSummary(asOf?: string) {
   return useQuery({
-    queryKey: ["balance-sheet", asOf],
+    queryKey: ["cumulative-balance-summary", asOf],
     enabled: Boolean(asOf),
     staleTime: 5 * 60 * 1000,
     gcTime: 15 * 60 * 1000,
     queryFn: async () => {      
       const params = new URLSearchParams({ as_of: asOf ?? "" });
       const url = `${endpoints.reports.balanceSheet}?${params.toString()}`;
-      const response = await http.get<BalanceSheetResponse>(url);
+      const response = await http.get<CumulativeBalanceSummary>(url);
       return response.data;
     },
   });

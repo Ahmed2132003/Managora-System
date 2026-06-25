@@ -1,17 +1,13 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { isForbiddenError } from "../../shared/api/errors";
-import {
-  type ProfitLossAccount,
-  useProfitLoss,
-} from "../../shared/accounting/hooks";
+import { useProfitLoss } from "../../shared/accounting/hooks";
 import { useCan, hasPermission } from "../../shared/auth/useCan";
 import { getAllowedPathsForRole } from "../../shared/auth/roleAccess";
 import { resolvePrimaryRole } from "../../shared/auth/roleNavigation";
 import { useMe } from "../../shared/auth/useMe";
 import { clearTokens } from "../../shared/auth/tokens";
 import { AccessDenied } from "../../shared/ui/AccessDenied";
-import { TablePagination, useClientPagination } from "../../shared/ui";
 import { downloadCsv, formatAmount } from "../../shared/accounting/reporting.ts";
 import "../DashboardPage.css";
 import { TopbarQuickActions } from "../TopbarQuickActions";
@@ -50,14 +46,16 @@ type Content = {
     dateTo: string;
   };
   table: {
-    account: string;
-    name: string;
     type: string;
     debit: string;
     credit: string;
     net: string;
     loading: string;
     empty: string;
+  };
+  typeLabels: {
+    INCOME: string;
+    EXPENSE: string;
   };
   actions: {
     exportCsv: string;
@@ -77,7 +75,6 @@ type Content = {
     policies: string;
     hrActions: string;
     payroll: string;
-    accountingSetup: string;
     journalEntries: string;
     expenses: string;
     collections: string;
@@ -114,7 +111,7 @@ const contentMap: Record<Language, Content> = {
     logoutLabel: "Logout",
     footer: "This system is produced by Creativity Code.",
     userFallback: "Explorer",
-    searchPlaceholder: "Search P&L accounts...",
+    searchPlaceholder: "Search P&L...",
     pageTitle: "Profit & Loss",
     pageSubtitle: "Understand profitability across income and expenses.",
     summaryTitle: "Performance Snapshot",
@@ -122,7 +119,7 @@ const contentMap: Record<Language, Content> = {
     filtersTitle: "Filters",
     filtersSubtitle: "Select a period to refresh the report.",
     tableTitle: "Income & expenses",
-    tableSubtitle: "Breakdown by account for the selected period.",
+    tableSubtitle: "Totals for the selected period.",
     rangeLabel: "Last 30 days",
     stats: {
       income: "Income",
@@ -135,14 +132,16 @@ const contentMap: Record<Language, Content> = {
       dateTo: "Date to",
     },
     table: {
-      account: "Account",
-      name: "Name",
       type: "Type",
       debit: "Debit",
       credit: "Credit",
       net: "Net",
       loading: "Loading P&L...",
       empty: "Select a date range to view the P&L.",
+    },
+    typeLabels: {
+      INCOME: "Income",
+      EXPENSE: "Expense",
     },
     actions: {
       exportCsv: "Export CSV",
@@ -162,14 +161,13 @@ const contentMap: Record<Language, Content> = {
       policies: "Policies",
       hrActions: "HR Actions",
       payroll: "Payroll",
-      accountingSetup: "Accounting Setup",
       journalEntries: "Journal Entries",
       expenses: "Expenses",
       collections: "Collections",
       trialBalance: "Trial Balance",
       generalLedger: "General Ledger",
       profitLoss: "Profit & Loss",
-      balanceSheet: "Balance Sheet",
+      balanceSheet: "Income & Expense Summary",
       agingReport: "AR Aging",
       customers: "Customers",
       newCustomer: "New Customer",
@@ -197,7 +195,7 @@ const contentMap: Record<Language, Content> = {
     logoutLabel: "تسجيل الخروج",
     footer: "هذا السيستم من انتاج كريتفيتي كود",
     userFallback: "ضيف",
-    searchPlaceholder: "ابحث في حسابات الأرباح والخسائر...",
+    searchPlaceholder: "ابحث في الأرباح والخسائر...",
     pageTitle: "الأرباح والخسائر",
     pageSubtitle: "تابع الأداء المالي بين الإيرادات والمصروفات.",
     summaryTitle: "ملخص الأداء",
@@ -205,7 +203,7 @@ const contentMap: Record<Language, Content> = {
     filtersTitle: "الفلاتر",
     filtersSubtitle: "اختر الفترة لعرض التقرير.",
     tableTitle: "الإيرادات والمصروفات",
-    tableSubtitle: "تفصيل الحسابات للفترة المحددة.",
+    tableSubtitle: "إجمالي الفترة المحددة.",
     rangeLabel: "آخر ٣٠ يوم",
     stats: {
       income: "الإيرادات",
@@ -218,14 +216,16 @@ const contentMap: Record<Language, Content> = {
       dateTo: "إلى تاريخ",
     },
     table: {
-      account: "الحساب",
-      name: "الاسم",
       type: "النوع",
       debit: "مدين",
       credit: "دائن",
       net: "الصافي",
       loading: "جاري تحميل التقرير...",
       empty: "اختر فترة لعرض التقرير.",
+    },
+    typeLabels: {
+      INCOME: "إيرادات",
+      EXPENSE: "مصروفات",
     },
     actions: {
       exportCsv: "تصدير CSV",
@@ -245,14 +245,13 @@ const contentMap: Record<Language, Content> = {
       policies: "السياسات",
       hrActions: "إجراءات الموارد البشرية",
       payroll: "الرواتب",
-      accountingSetup: "إعداد المحاسبة",
       journalEntries: "قيود اليومية",
       expenses: "المصروفات",
       collections: "التحصيلات",
       trialBalance: "ميزان المراجعة",
       generalLedger: "دفتر الأستاذ",
       profitLoss: "الأرباح والخسائر",
-      balanceSheet: "الميزانية العمومية",
+      balanceSheet: "ملخص الإيرادات والمصروفات",
       agingReport: "أعمار الديون",
       customers: "العملاء",
       newCustomer: "عميل جديد",
@@ -320,11 +319,24 @@ export function ProfitLossPage() {
   const pnlQuery = useProfitLoss(dateFrom || undefined, dateTo || undefined);
   const canExport = useCan("export.accounting");
 
-  const allRows = useMemo<ProfitLossAccount[]>(() => {    
+  const typeLabel = useCallback(
+    (type: string) =>
+      type === "INCOME"
+        ? content.typeLabels.INCOME
+        : type === "EXPENSE"
+          ? content.typeLabels.EXPENSE
+          : type,
+    [content.typeLabels]
+  );
+
+  // النظام المبسط: عنصر واحد بالضبط لكل من income/expense (بدل قوائم حسابات).
+  const allRows = useMemo(() => {
     if (!pnlQuery.data) {
       return [];
     }
-    return [...pnlQuery.data.income_accounts, ...pnlQuery.data.expense_accounts];
+    return [pnlQuery.data.income_account, pnlQuery.data.expense_account].filter(
+      (row): row is NonNullable<typeof row> => Boolean(row)
+    );
   }, [pnlQuery.data]);
 
   const incomeTotal = useMemo(() => {
@@ -343,16 +355,10 @@ export function ProfitLossPage() {
   const filteredRows = useMemo(() => {
     const query = searchTerm.trim().toLowerCase();
     if (!query) {
-      return allRows;      
+      return allRows;
     }
-    return allRows.filter((row: ProfitLossAccount) => {      
-      return (
-        row.code.toLowerCase().includes(query) ||
-        row.name.toLowerCase().includes(query) ||
-        row.type.toLowerCase().includes(query)
-      );
-    });
-  }, [allRows, searchTerm]);
+    return allRows.filter((row) => typeLabel(row.type).toLowerCase().includes(query));
+  }, [allRows, searchTerm, typeLabel]);
 
   const profitMargin = useMemo(() => {
     if (incomeTotal === 0) {      
@@ -361,26 +367,12 @@ export function ProfitLossPage() {
     return (netProfit / incomeTotal) * 100;
   }, [incomeTotal, netProfit]);
 
-  const {
-    page,
-    setPage,
-    totalPages,
-    paginatedRows,
-  } = useClientPagination(filteredRows, 10);
-
   function handleExport() {
     if (!pnlQuery.data) {
       return;
     }
-    const headers = ["Account Code", "Account Name", "Type", "Debit", "Credit", "Net"];
-    const rows = allRows.map((row) => [
-      row.code,
-      row.name,
-      row.type,
-      row.debit,
-      row.credit,
-      row.net,
-    ]);
+    const headers = ["Type", "Debit", "Credit", "Net"];
+    const rows = allRows.map((row) => [typeLabel(row.type), row.debit, row.credit, row.net]);
     downloadCsv(
       `pnl-${dateFrom || "start"}-${dateTo || "end"}.csv`,
       headers,
@@ -475,12 +467,6 @@ export function ProfitLossPage() {
         label: content.nav.payroll,
         icon: "💸",
         permissions: ["hr.payroll.view", "hr.payroll.*"],
-      },
-      {
-        path: "/accounting/setup",
-        label: content.nav.accountingSetup,
-        icon: "⚙️",
-        permissions: ["accounting.manage_coa", "accounting.*"],
       },
       {
         path: "/accounting/journal-entries",
@@ -805,8 +791,6 @@ export function ProfitLossPage() {
                 <table className="data-table">
                   <thead>
                     <tr>
-                      <th>{content.table.account}</th>
-                      <th>{content.table.name}</th>
                       <th>{content.table.type}</th>
                       <th>{content.table.debit}</th>
                       <th>{content.table.credit}</th>
@@ -814,11 +798,9 @@ export function ProfitLossPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {paginatedRows.map((row: ProfitLossAccount) => (                      
+                    {filteredRows.map((row) => (
                       <tr key={row.account_id}>
-                        <td>{row.code}</td>
-                        <td>{row.name}</td>
-                        <td>{row.type}</td>
+                        <td>{typeLabel(row.type)}</td>
                         <td>{formatAmount(row.debit)}</td>
                         <td>{formatAmount(row.credit)}</td>
                         <td>{formatAmount(row.net)}</td>
@@ -829,13 +811,6 @@ export function ProfitLossPage() {
               ) : (
                 <p className="helper-text">{content.table.empty}</p>
               )}
-              <TablePagination
-                page={page}
-                totalPages={totalPages}
-                onPreviousPage={() => setPage((prev: number) => prev - 1)}
-                onNextPage={() => setPage((prev: number) => prev + 1)}                
-                disabled={!filteredRows.length || pnlQuery.isLoading}
-              />
             </div>
           </section>
         </main>

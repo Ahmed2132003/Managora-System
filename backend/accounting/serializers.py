@@ -7,9 +7,6 @@ from rest_framework import serializers
 
 from accounting.models import (
     Account,
-    AccountMapping,
-    ChartOfAccounts,
-    CostCenter,
     Customer,
     Expense,
     ExpenseAttachment,
@@ -22,57 +19,20 @@ from accounting.models import (
     StockTransaction,
 )
 
-from accounting.services.journal import post_journal_entry
 from accounting.services.payments import record_payment
-from accounting.services.seed import TEMPLATES
-from accounting.services.mappings import ensure_mapping_account
-from accounting.services.primary_accounts import get_or_create_primary_account
+from accounting.services.primary_accounts import get_expense_account
+
 
 class AccountSerializer(serializers.ModelSerializer):
     class Meta:
         model = Account
         fields = [
             "id",
-            "code",
-            "name",
             "type",
-            "parent",
-            "chart",
-            "is_active",
             "created_at",
             "updated_at",
         ]
-        read_only_fields = ["created_at", "updated_at"]
-
-    def validate_parent(self, parent):
-        if not parent:
-            return parent
-        company = self.context["request"].user.company
-        if parent.company_id != company.id:
-            raise serializers.ValidationError("Parent must belong to the same company.")
-        return parent
-
-    def validate_chart(self, chart):
-        if not chart:
-            return chart
-        company = self.context["request"].user.company
-        if chart.company_id != company.id:
-            raise serializers.ValidationError("Chart must belong to the same company.")
-        return chart
-
-
-class CostCenterSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = CostCenter
-        fields = [
-            "id",
-            "code",
-            "name",
-            "is_active",
-            "created_at",
-            "updated_at",
-        ]
-        read_only_fields = ["created_at", "updated_at"]
+        read_only_fields = ["id", "type", "created_at", "updated_at"]
 
 
 class CustomerSerializer(serializers.ModelSerializer):
@@ -96,35 +56,16 @@ class CustomerSerializer(serializers.ModelSerializer):
         if value < 0:
             raise serializers.ValidationError("Payment terms must be 0 or greater.")
         return value
-    
-
-class ApplyTemplateSerializer(serializers.Serializer):
-    template_key = serializers.ChoiceField(choices=sorted(TEMPLATES.keys()))
-
-
-class ChartOfAccountsSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = ChartOfAccounts
-        fields = [
-            "id",
-            "name",
-            "is_default",
-            "created_at",
-            "updated_at",
-        ]
-        read_only_fields = ["created_at", "updated_at"]
 
 
 class JournalLineSerializer(serializers.ModelSerializer):
     account = AccountSerializer(read_only=True)
-    cost_center = CostCenterSerializer(read_only=True)
 
     class Meta:
         model = JournalLine
         fields = [
             "id",
             "account",
-            "cost_center",
             "description",
             "debit",
             "credit",
@@ -153,7 +94,6 @@ class JournalEntrySerializer(serializers.ModelSerializer):
 
 class JournalLineInputSerializer(serializers.Serializer):
     account_id = serializers.IntegerField()
-    cost_center_id = serializers.IntegerField(required=False, allow_null=True)
     description = serializers.CharField(required=False, allow_blank=True)
     debit = serializers.DecimalField(max_digits=14, decimal_places=2, required=False)
     credit = serializers.DecimalField(max_digits=14, decimal_places=2, required=False)
@@ -174,6 +114,8 @@ class JournalEntryCreateSerializer(serializers.Serializer):
     lines = JournalLineInputSerializer(many=True)
 
     def create(self, validated_data):
+        from accounting.services.journal import post_journal_entry
+
         request = self.context["request"]
         try:
             return post_journal_entry(
@@ -375,9 +317,7 @@ class ExpenseSerializer(serializers.ModelSerializer):
             "amount",
             "currency",
             "payment_method",
-            "paid_from_account",
             "expense_account",
-            "cost_center",
             "notes",
             "status",
             "created_by",
@@ -385,75 +325,21 @@ class ExpenseSerializer(serializers.ModelSerializer):
             "updated_at",
             "attachments",
         ]
-        read_only_fields = ["created_by", "created_at", "updated_at", "attachments"]
-        extra_kwargs = {
-            "expense_account": {"required": False},
-            "paid_from_account": {"required": False},
-        }
+        read_only_fields = [
+            "expense_account",
+            "created_by",
+            "created_at",
+            "updated_at",
+            "attachments",
+        ]
 
     def validate(self, attrs):
         request = self.context["request"]
         company = request.user.company
-        cost_center = attrs.get("cost_center")
-
-        attrs["expense_account"] = get_or_create_primary_account(
-            company,
-            Account.Type.EXPENSE,
-        )
-        attrs["paid_from_account"] = ensure_mapping_account(
-            company,
-            AccountMapping.Key.EXPENSE_DEFAULT_CASH,
-        )
-
-        if cost_center and cost_center.company_id != company.id:
-            raise serializers.ValidationError("Cost center must belong to the same company.")
+        # حساب EXPENSE واحد فقط للشركة بالكامل - يُحدَّد تلقائيًا دائمًا،
+        # لا يُرسَل أو يُختار من المستخدم.
+        attrs["expense_account"] = get_expense_account(company)
         return attrs
-
-
-class AccountMappingSerializer(serializers.ModelSerializer):
-    account_name = serializers.CharField(source="account.name", read_only=True)
-    account_code = serializers.CharField(source="account.code", read_only=True)
-
-    class Meta:
-        model = AccountMapping
-        fields = [
-            "id",
-            "key",
-            "account",
-            "account_name",
-            "account_code",
-            "required",
-            "created_at",
-            "updated_at",
-        ]
-        read_only_fields = ["created_at", "updated_at"]
-
-    def validate_account(self, account):
-        if not account:
-            return account
-        company = self.context["request"].user.company
-        if account.company_id != company.id:
-            raise serializers.ValidationError("Account must belong to the same company.")
-        return account
-
-    def validate(self, attrs):
-        key = attrs.get("key") or getattr(self.instance, "key", None)
-        account = attrs.get("account") or getattr(self.instance, "account", None)
-        required = attrs.get("required", getattr(self.instance, "required", None))
-        if required is None:
-            required = key in AccountMapping.REQUIRED_KEYS
-            attrs["required"] = required
-        if key in AccountMapping.REQUIRED_KEYS and required is False:
-            raise serializers.ValidationError("Required mappings cannot be optional.")
-        if key in AccountMapping.REQUIRED_KEYS and not account:
-            raise serializers.ValidationError("Required account mapping must include an account.")
-        return attrs
-
-    def create(self, validated_data):
-        key = validated_data.get("key")
-        if "required" not in validated_data:
-            validated_data["required"] = key in AccountMapping.REQUIRED_KEYS
-        return super().create(validated_data)
 
 
 class PaymentSerializer(serializers.ModelSerializer):
@@ -467,7 +353,6 @@ class PaymentSerializer(serializers.ModelSerializer):
             "payment_date",
             "amount",
             "method",
-            "cash_account",
             "notes",
             "created_by",
             "created_at",
@@ -479,9 +364,6 @@ class PaymentSerializer(serializers.ModelSerializer):
         company = request.user.company
         customer = attrs.get("customer") or getattr(self.instance, "customer", None)
         invoice = attrs.get("invoice") or getattr(self.instance, "invoice", None)
-        cash_account = attrs.get("cash_account") or getattr(
-            self.instance, "cash_account", None
-        )
 
         if customer and customer.company_id != company.id:
             raise serializers.ValidationError("Customer must belong to the same company.")
@@ -490,8 +372,6 @@ class PaymentSerializer(serializers.ModelSerializer):
                 raise serializers.ValidationError("Invoice must belong to the same company.")
             if customer and invoice.customer_id != customer.id:
                 raise serializers.ValidationError("Invoice customer mismatch.")
-        if cash_account and cash_account.company_id != company.id:
-            raise serializers.ValidationError("Cash account must belong to the same company.")
         return attrs
 
     def validate_amount(self, value):
@@ -516,28 +396,14 @@ class PaymentSerializer(serializers.ModelSerializer):
                 detail = exc.messages
             raise serializers.ValidationError(detail) from exc
         return payment
-    
 
-class AccountMappingBulkSetSerializer(serializers.Serializer):
-    mappings = serializers.DictField(
-        child=serializers.IntegerField(allow_null=True),
-        allow_empty=False,
-    )
-
-    def validate_mappings(self, mappings):
-        allowed_keys = {key for key, _ in AccountMapping.Key.choices}
-        invalid_keys = [key for key in mappings.keys() if key not in allowed_keys]
-        if invalid_keys:
-            raise serializers.ValidationError(
-                f"Invalid mapping keys: {', '.join(sorted(invalid_keys))}."
-            )
-        return mappings
 
 class ExpenseAttachmentCreateSerializer(serializers.ModelSerializer):
     class Meta:
         model = ExpenseAttachment
         fields = ["id", "file"]
         read_only_fields = ["id"]
+
 
 class CatalogItemSerializer(serializers.ModelSerializer):
     class Meta:

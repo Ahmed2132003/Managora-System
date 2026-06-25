@@ -2,11 +2,7 @@ import json
 import logging
 from pathlib import Path
 
-from django.core.exceptions import ValidationError
 from django.db import transaction
-
-from accounting.models import Account, AccountMapping, ChartOfAccounts
-from accounting.services.seed import TEMPLATES, seed_coa_template
 
 from core.models import CompanySetupState, Permission, Role, RolePermission
 from core.permissions import PERMISSION_DEFINITIONS, ROLE_PERMISSION_MAP
@@ -16,22 +12,6 @@ from hr.models import LeaveType, PolicyRule, Shift, WorkSite
 TEMPLATE_DIR = Path(__file__).resolve().parent.parent / "templates"
 logger = logging.getLogger(__name__)
 
-MAPPING_KEY_MAP = {
-    "payroll_expense": AccountMapping.Key.PAYROLL_SALARIES_EXPENSE,
-    "payroll_payable": AccountMapping.Key.PAYROLL_PAYABLE,
-    "cash": AccountMapping.Key.EXPENSE_DEFAULT_CASH,
-    "receivables": AccountMapping.Key.ACCOUNTS_RECEIVABLE,
-    "sales": AccountMapping.Key.SALES_REVENUE,
-}
-
-FALLBACK_ACCOUNT_TYPES = {
-    AccountMapping.Key.PAYROLL_SALARIES_EXPENSE: Account.Type.EXPENSE,
-    AccountMapping.Key.PAYROLL_PAYABLE: Account.Type.LIABILITY,
-    AccountMapping.Key.EXPENSE_DEFAULT_CASH: Account.Type.ASSET,
-    AccountMapping.Key.EXPENSE_DEFAULT_AP: Account.Type.LIABILITY,
-    AccountMapping.Key.ACCOUNTS_RECEIVABLE: Account.Type.ASSET,
-    AccountMapping.Key.SALES_REVENUE: Account.Type.INCOME,
-}
 
 # ✅ Fallback bundle (لو JSON مش موجود)
 # IMPORTANT: roles permissions هنا مجرد "marker" — الصلاحيات الحقيقية بتيجي من ROLE_PERMISSION_MAP
@@ -302,96 +282,19 @@ def apply_policies(company, policies_data):
         )
 
 
-def _resolve_account_defaults(account_code, mapped_key, template_accounts, chart):
-    template_account = template_accounts.get(account_code)
-    if template_account:
-        return {
-            "name": template_account["name"],
-            "type": template_account["type"],
-            "chart": chart,
-            "is_active": True,
-        }
-    fallback_type = FALLBACK_ACCOUNT_TYPES.get(mapped_key, Account.Type.ASSET)
-    fallback_name = mapped_key.label if mapped_key else f"Account {account_code}"
-    return {
-        "name": fallback_name,
-        "type": fallback_type,
-        "chart": chart,
-        "is_active": True,
-    }
-
-
-def _get_or_create_default_chart(company, template_name=None):
-    chart_name = template_name or "Default Chart of Accounts"
-    chart, _ = ChartOfAccounts.objects.get_or_create(
-        company=company,
-        is_default=True,
-        defaults={"name": chart_name},
-    )
-    if chart.name != chart_name:
-        chart.name = chart_name
-        chart.save(update_fields=["name"])
-    return chart
-
-
 def apply_accounting(company, accounting_data):
-    template_key = accounting_data.get("chart_of_accounts_template")
-    template_accounts = {}
-    chart = None
-    if template_key:
-        try:
-            seed_coa_template(company=company, template_key=template_key)
-        except ValueError:
-            template_accounts = {}
-        except Exception:  # noqa: BLE001
-            logger.exception("Failed to seed chart of accounts template %s", template_key)
-        template = TEMPLATES.get(template_key, {})
-        template_accounts = {account["code"]: account for account in template.get("accounts", [])}
-        chart = ChartOfAccounts.objects.filter(company=company, is_default=True).first()
-        if not chart:
-            chart = _get_or_create_default_chart(company, template.get("name"))
+    """
+    النظام المحاسبي المبسط (Phase 2/3 من خطة تبسيط الحسابات):
+    لكل شركة حسابان فقط - INCOME و EXPENSE - يُنشآن تلقائيًا عبر signal
+    عند إنشاء الشركة (انظر accounting/signals.py لاحقًا).
 
-    mappings = accounting_data.get("mappings", {})
-    if not mappings:
-        return
+    لم تعد هناك حاجة لقوالب Chart of Accounts أو Account Mapping يدوية،
+    فهذه الدالة أصبحت idempotent no-op بسيطة تضمن وجود الحسابين فقط،
+    دون أي اعتماد على ChartOfAccounts/AccountMapping (محذوفان من الموديلات).
+    """
+    from accounting.services.primary_accounts import ensure_company_accounts
 
-    account_codes = {code for code in mappings.values() if code}
-    accounts = Account.objects.filter(company=company, code__in=account_codes)
-    accounts_by_code = {account.code: account for account in accounts}
-    missing_codes = account_codes.difference(accounts_by_code.keys())
-    if missing_codes:
-        for code in missing_codes:
-            account, _ = Account.objects.get_or_create(
-                company=company,
-                code=code,
-                defaults=_resolve_account_defaults(code, None, template_accounts, chart),
-            )
-            accounts_by_code[code] = account
-
-    for mapping_key, account_code in mappings.items():
-        mapped_key = MAPPING_KEY_MAP.get(mapping_key)
-        if not mapped_key or not account_code:
-            continue
-
-        account = accounts_by_code.get(account_code)
-        required = mapped_key in AccountMapping.REQUIRED_KEYS
-
-        if not account:
-            account, _ = Account.objects.get_or_create(
-                company=company,
-                code=account_code,
-                defaults=_resolve_account_defaults(account_code, mapped_key, template_accounts, chart),
-            )
-            accounts_by_code[account_code] = account
-
-        try:
-            AccountMapping.objects.update_or_create(
-                company=company,
-                key=mapped_key,
-                defaults={"account": account, "required": required},
-            )
-        except ValidationError:
-            logger.exception("Failed to apply account mapping %s for company %s.", mapped_key, company.id)
+    ensure_company_accounts(company)
 
 
 def apply_template_bundle(company, bundle):
@@ -416,15 +319,17 @@ def apply_template_bundle(company, bundle):
             apply_policies(company, bundle["policies"])
             state.policies_applied = True
             update_fields.append("policies_applied")
-            
-        if bundle.get("accounting"):
-            try:
-                apply_accounting(company, bundle["accounting"])
-            except Exception:  # noqa: BLE001
-                logger.exception("Failed to apply accounting template for company %s.", company.id)
-            else:
-                state.coa_applied = True
-                update_fields.append("coa_applied")
+
+        # ملاحظة: نطبّق ضمان وجود الحسابين دائمًا (idempotent) بغض النظر عن
+        # محتوى bundle["accounting"]، لأن النظام المبسط لا يعتمد على بيانات
+        # قالب خارجية بعد الآن - فقط يضمن وجود INCOME/EXPENSE للشركة.
+        try:
+            apply_accounting(company, bundle.get("accounting", {}))
+        except Exception:  # noqa: BLE001
+            logger.exception("Failed to ensure default accounts for company %s.", company.id)
+        else:
+            state.coa_applied = True
+            update_fields.append("coa_applied")
 
     if update_fields:
         state.save(update_fields=update_fields + ["updated_at"])

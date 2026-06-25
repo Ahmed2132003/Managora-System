@@ -3,30 +3,6 @@ from django.db import models
 from django.db.models import Q
 
 
-class ChartOfAccounts(models.Model):
-    company = models.ForeignKey(
-        "core.Company",
-        on_delete=models.CASCADE,
-        related_name="charts_of_accounts",
-    )
-    name = models.CharField(max_length=255)
-    is_default = models.BooleanField(default=False)
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-
-    class Meta:
-        constraints = [
-            models.UniqueConstraint(
-                fields=["company"],
-                condition=Q(is_default=True),
-                name="unique_default_coa_per_company",
-            ),
-        ]
-
-    def __str__(self):
-        return f"{self.company.name} - {self.name}"
-
-
 class Customer(models.Model):
     company = models.ForeignKey(
         "core.Company",
@@ -60,12 +36,8 @@ class Customer(models.Model):
         return f"{self.code} - {self.name}"
 
 
-
 class Account(models.Model):
     class Type(models.TextChoices):
-        ASSET = "ASSET", "Asset"
-        LIABILITY = "LIABILITY", "Liability"
-        EQUITY = "EQUITY", "Equity"
         INCOME = "INCOME", "Income"
         EXPENSE = "EXPENSE", "Expense"
 
@@ -74,127 +46,20 @@ class Account(models.Model):
         on_delete=models.CASCADE,
         related_name="accounts",
     )
-    chart = models.ForeignKey(
-        "accounting.ChartOfAccounts",
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        related_name="accounts",
-    )
-    code = models.CharField(max_length=32)
-    name = models.CharField(max_length=255)
     type = models.CharField(max_length=20, choices=Type.choices)
-    parent = models.ForeignKey(
-        "self",
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        related_name="children",
-    )
-    is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
         constraints = [
             models.UniqueConstraint(
-                fields=["company", "code"],
-                name="unique_account_code_per_company",
-            ),
-        ]
-
-    def clean(self):
-        if self.parent and self.parent.company_id != self.company_id:
-            raise ValidationError("Parent account must belong to the same company.")
-        if self.parent and self.parent_id == self.id:
-            raise ValidationError("Account cannot be its own parent.")
-
-    def __str__(self):
-        return f"{self.code} - {self.name}"
-
-
-class AccountMapping(models.Model):
-    class Key(models.TextChoices):
-        ACCOUNTS_RECEIVABLE = "ACCOUNTS_RECEIVABLE", "Accounts Receivable"
-        SALES_REVENUE = "SALES_REVENUE", "Sales Revenue"
-        SALES_LIABILITY = "SALES_LIABILITY", "Sales Liability"
-        SALES_COGS_EXPENSE = "SALES_COGS_EXPENSE", "Cost of Goods Sold"
-        PAYROLL_SALARIES_EXPENSE = "PAYROLL_SALARIES_EXPENSE", "Payroll Salaries Expense"
-        PAYROLL_PAYABLE = "PAYROLL_PAYABLE", "Payroll Payable"
-        EXPENSE_DEFAULT_CASH = "EXPENSE_DEFAULT_CASH", "Expense Default Cash"
-        EXPENSE_DEFAULT_AP = "EXPENSE_DEFAULT_AP", "Expense Default AP"
-
-    REQUIRED_KEYS = {
-        Key.ACCOUNTS_RECEIVABLE,
-        Key.SALES_REVENUE,
-        Key.PAYROLL_SALARIES_EXPENSE,
-        Key.PAYROLL_PAYABLE,
-    }
-
-    company = models.ForeignKey(
-        "core.Company",
-        on_delete=models.CASCADE,
-        related_name="account_mappings",
-    )
-    key = models.CharField(max_length=64, choices=Key.choices)
-    account = models.ForeignKey(
-        "accounting.Account",
-        on_delete=models.PROTECT,
-        null=True,
-        blank=True,
-        related_name="account_mappings",
-    )
-    required = models.BooleanField(default=True)
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-
-    class Meta:
-        constraints = [
-            models.UniqueConstraint(
-                fields=["company", "key"],
-                name="unique_account_mapping_per_company_key",
-            ),
-        ]
-
-    def clean(self):
-        if self.account and self.account.company_id != self.company_id:
-            raise ValidationError("Account must belong to the same company.")
-
-    def save(self, *args, **kwargs):
-        if not self.required:
-            super().save(*args, **kwargs)
-            return
-        if not self.account_id and self.key in self.REQUIRED_KEYS:
-            raise ValidationError("Required account mapping must include an account.")
-        super().save(*args, **kwargs)
-
-    def __str__(self):
-        return f"{self.company.name} - {self.key}"
-
-
-
-class CostCenter(models.Model):
-    company = models.ForeignKey(
-        "core.Company",
-        on_delete=models.CASCADE,
-        related_name="cost_centers",
-    )
-    code = models.CharField(max_length=64)
-    name = models.CharField(max_length=255)
-    is_active = models.BooleanField(default=True)
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-
-    class Meta:
-        constraints = [
-            models.UniqueConstraint(
-                fields=["company", "code"],
-                name="unique_cost_center_code_per_company",
+                fields=["company", "type"],
+                name="unique_account_type_per_company",
             ),
         ]
 
     def __str__(self):
-        return f"{self.code} - {self.name}"
+        return f"{self.company.name} - {self.type}"
 
 
 class Invoice(models.Model):
@@ -300,11 +165,6 @@ class Payment(models.Model):
     payment_date = models.DateField()
     amount = models.DecimalField(max_digits=14, decimal_places=2)
     method = models.CharField(max_length=16, choices=Method.choices)
-    cash_account = models.ForeignKey(
-        "accounting.Account",
-        on_delete=models.PROTECT,
-        related_name="payments",
-    )
     notes = models.TextField(blank=True)
     created_by = models.ForeignKey(
         "core.User",
@@ -419,13 +279,6 @@ class JournalLine(models.Model):
         on_delete=models.PROTECT,
         related_name="journal_lines",
     )
-    cost_center = models.ForeignKey(
-        "accounting.CostCenter",
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        related_name="journal_lines",
-    )
     description = models.CharField(max_length=255, blank=True)
     debit = models.DecimalField(max_digits=14, decimal_places=2, default=0)
     credit = models.DecimalField(max_digits=14, decimal_places=2, default=0)
@@ -450,11 +303,9 @@ class JournalLine(models.Model):
             raise ValidationError("Journal line must have a debit or credit amount.")
         if self.account and self.account.company_id != self.company_id:
             raise ValidationError("Account must belong to the same company.")
-        if self.cost_center and self.cost_center.company_id != self.company_id:
-            raise ValidationError("Cost center must belong to the same company.")
 
     def __str__(self):
-        return f"{self.entry_id} - {self.account.code}"
+        return f"{self.entry_id} - {self.account.type}"
 
 
 class Expense(models.Model):
@@ -473,22 +324,10 @@ class Expense(models.Model):
     amount = models.DecimalField(max_digits=14, decimal_places=2)
     currency = models.CharField(max_length=16, blank=True)
     payment_method = models.CharField(max_length=32, blank=True)
-    paid_from_account = models.ForeignKey(
-        "accounting.Account",
-        on_delete=models.PROTECT,
-        related_name="paid_expenses",
-    )
     expense_account = models.ForeignKey(
         "accounting.Account",
         on_delete=models.PROTECT,
         related_name="expense_postings",
-    )
-    cost_center = models.ForeignKey(
-        "accounting.CostCenter",
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        related_name="expenses",
     )
     notes = models.TextField(blank=True)
     status = models.CharField(
@@ -507,12 +346,8 @@ class Expense(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     def clean(self):
-        if self.paid_from_account and self.paid_from_account.company_id != self.company_id:
-            raise ValidationError("Paid-from account must belong to the same company.")
         if self.expense_account and self.expense_account.company_id != self.company_id:
             raise ValidationError("Expense account must belong to the same company.")
-        if self.cost_center and self.cost_center.company_id != self.company_id:
-            raise ValidationError("Cost center must belong to the same company.")
 
     def __str__(self):
         return f"{self.company.name} - Expense {self.id}"

@@ -1,6 +1,4 @@
-
-
-import { useState, useCallback } from "react";
+import { useState } from "react";
 import {
   ActionIcon,
   Badge,
@@ -829,7 +827,6 @@ export function SuperAdminPage() {
   const { data } = useMe();
   const isSuperuser = Boolean(data?.user?.is_superuser);
 
-  // نجيب الشركات مرة واحدة ونمررها للـ tabs اللي محتاجاها
   const { data: companies = [] } = useQuery<CompanyRecord[]>({
     queryKey: ["superadmin-companies", ""],
     queryFn: async () =>

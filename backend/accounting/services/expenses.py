@@ -2,36 +2,7 @@ from django.core.exceptions import ValidationError
 from django.db import transaction
 
 from accounting.models import Expense, JournalEntry, JournalLine
-from accounting.services.journal import post_journal_entry
-
-
-def _expense_journal_payload(expense: Expense) -> dict:
-    return {
-        "date": expense.date,
-        "memo": expense.notes or f"Expense {expense.id}",
-        "reference_type": JournalEntry.ReferenceType.EXPENSE,
-        "reference_id": str(expense.id),
-        "status": (
-            JournalEntry.Status.POSTED
-            if expense.status == Expense.Status.APPROVED
-            else JournalEntry.Status.DRAFT
-        ),
-        "lines": [
-            {
-                "account_id": expense.expense_account_id,
-                "cost_center_id": expense.cost_center_id,
-                "description": expense.vendor_name or "Expense",
-                "debit": expense.amount,
-                "credit": 0,
-            },
-            {
-                "account_id": expense.paid_from_account_id,
-                "description": expense.vendor_name or "Expense payment",
-                "debit": 0,
-                "credit": expense.amount,
-            },
-        ],
-    }
+from accounting.services.primary_accounts import get_expense_account
 
 
 def _validate_expense(expense: Expense) -> None:
@@ -39,61 +10,71 @@ def _validate_expense(expense: Expense) -> None:
         raise ValidationError("Expense amount must be greater than zero.")
     if expense.expense_account.company_id != expense.company_id:
         raise ValidationError("Expense account must belong to the same company.")
-    if expense.paid_from_account.company_id != expense.company_id:
-        raise ValidationError("Paid-from account must belong to the same company.")
-    if expense.cost_center and expense.cost_center.company_id != expense.company_id:
-        raise ValidationError("Cost center must belong to the same company.")
 
 
-def _refresh_expense_journal_lines(entry: JournalEntry, expense: Expense) -> None:
-    description = expense.vendor_name or "Expense"
-    payment_description = expense.vendor_name or "Expense payment"
+def _refresh_expense_journal_line(entry: JournalEntry, expense: Expense) -> None:
     entry.lines.all().delete()
-    JournalLine.objects.bulk_create(
-        [
-            JournalLine(
-                company=expense.company,
-                entry=entry,
-                account=expense.expense_account,
-                cost_center=expense.cost_center,
-                description=description,
-                debit=expense.amount,
-                credit=0,
-            ),
-            JournalLine(
-                company=expense.company,
-                entry=entry,
-                account=expense.paid_from_account,
-                cost_center=None,
-                description=payment_description,
-                debit=0,
-                credit=expense.amount,
-            ),
-        ]
+    JournalLine.objects.create(
+        company=expense.company,
+        entry=entry,
+        account=expense.expense_account,
+        description=expense.vendor_name or "Expense",
+        debit=expense.amount,
+        credit=0,
     )
 
 
 def ensure_expense_journal_entry(expense: Expense):
+    """
+    يسجل أثر المصروف على حساب EXPENSE: سطر واحد (Debit) بقيمة المصروف.
+    لا يوجد طرف "دفع من" (Cash/AP) لأنه محذوف من النظام المبسط.
+
+    القيد يظل DRAFT إذا كان المصروف لم يُعتمد بعد، ويصبح POSTED فقط عند
+    الاعتماد (status == APPROVED) - بنفس فلسفة النظام القديم، لكن بسطر
+    واحد بدل قيد مزدوج.
+
+    هذا قيد غير متوازن بقصد على مستوى القيد الواحد (نظام "الأثر الصافي")،
+    لذلك لا يمر على post_journal_entry() العامة - يُنشأ مباشرة هنا.
+    """
+    _validate_expense(expense)
+    company = expense.company
+
+    status = (
+        JournalEntry.Status.POSTED
+        if expense.status == Expense.Status.APPROVED
+        else JournalEntry.Status.DRAFT
+    )
+
     existing_entry = JournalEntry.objects.filter(
-        company=expense.company,
+        company=company,
         reference_type=JournalEntry.ReferenceType.EXPENSE,
         reference_id=str(expense.id),
     ).first()
-    _validate_expense(expense)
-
-    payload = _expense_journal_payload(expense)
-    if existing_entry:
-        with transaction.atomic():
-            existing_entry.date = payload["date"]
-            existing_entry.memo = payload["memo"]
-            existing_entry.status = payload["status"]
-            existing_entry.save(update_fields=["date", "memo", "status", "updated_at"])
-            _refresh_expense_journal_lines(existing_entry, expense)
-        return existing_entry
 
     with transaction.atomic():
-        return post_journal_entry(
-            company=expense.company,
-            payload=payload,
+        if existing_entry:
+            existing_entry.date = expense.date
+            existing_entry.memo = expense.notes or f"Expense {expense.id}"
+            existing_entry.status = status
+            existing_entry.save(update_fields=["date", "memo", "status", "updated_at"])
+            _refresh_expense_journal_line(existing_entry, expense)
+            return existing_entry
+
+        entry = JournalEntry.objects.create(
+            company=company,
+            date=expense.date,
+            reference_type=JournalEntry.ReferenceType.EXPENSE,
+            reference_id=str(expense.id),
+            memo=expense.notes or f"Expense {expense.id}",
+            status=status,
             created_by=expense.created_by,
         )
+        JournalLine.objects.create(
+            company=company,
+            entry=entry,
+            account=expense.expense_account,
+            description=expense.vendor_name or "Expense",
+            debit=expense.amount,
+            credit=0,
+        )
+        return entry

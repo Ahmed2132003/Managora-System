@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import { clearTokens } from "../../shared/auth/tokens";
@@ -11,7 +11,6 @@ import {
   type JournalEntry,
   type JournalEntryLinePayload,
   useAccounts,
-  useCostCenters,
   useCreateJournalEntry,
   useDeleteJournalEntry,
   useJournalEntries,
@@ -79,7 +78,6 @@ type Content = {
     memo: string;
     linesTitle: string;
     account: string;
-    costCenter: string;
     description: string;
     debit: string;
     credit: string;
@@ -97,6 +95,10 @@ type Content = {
     errorBoth: string;
   };  
   referenceOptions: Array<{ value: string; label: string }>;
+  typeLabels: {
+    INCOME: string;
+    EXPENSE: string;
+  };
   nav: {
     dashboard: string;
     users: string;
@@ -112,7 +114,6 @@ type Content = {
     policies: string;
     hrActions: string;
     payroll: string;
-    accountingSetup: string;
     journalEntries: string;
     expenses: string;
     collections: string;
@@ -151,7 +152,7 @@ const contentMap: Record<Language, Content> = {
     userFallback: "Explorer",
     searchPlaceholder: "Search journal entries...",
     pageTitle: "Journal Entries",
-    pageSubtitle: "Track accounting movements with clarity and control.",
+    pageSubtitle: "Manual entries between income and expense, recorded with clarity.",
     summaryTitle: "Journal Overview",
     summarySubtitle: "Snapshot of the latest posting activity",
     filtersTitle: "Filters",
@@ -188,13 +189,12 @@ const contentMap: Record<Language, Content> = {
     modal: {
       titleCreate: "New journal entry",
       titleEdit: "Edit journal entry",
-      subtitle: "Add the entry header and line items.",
+      subtitle: "Manual entries are only used to move amounts between Income and Expense.",
       date: "Entry date",
       referenceType: "Reference type",
       memo: "Memo",
       linesTitle: "Entry lines",
       account: "Account",
-      costCenter: "Cost center",
       description: "Description",
       debit: "Debit",
       credit: "Credit",
@@ -217,6 +217,10 @@ const contentMap: Record<Language, Content> = {
       { value: "expense", label: "Expense" },
       { value: "adjustment", label: "Adjustment" },
     ],
+    typeLabels: {
+      INCOME: "Income",
+      EXPENSE: "Expense",
+    },
     nav: {
       dashboard: "Dashboard",
       users: "Users",
@@ -232,14 +236,13 @@ const contentMap: Record<Language, Content> = {
       policies: "Policies",
       hrActions: "HR Actions",
       payroll: "Payroll",
-      accountingSetup: "Accounting Setup",
       journalEntries: "Journal Entries",
       expenses: "Expenses",
       collections: "Collections",
       trialBalance: "Trial Balance",
       generalLedger: "General Ledger",
       profitLoss: "Profit & Loss",
-      balanceSheet: "Balance Sheet",
+      balanceSheet: "Income & Expense Summary",
       agingReport: "AR Aging",
       customers: "Customers",
       newCustomer: "New Customer",
@@ -269,7 +272,7 @@ const contentMap: Record<Language, Content> = {
     userFallback: "ضيف",
     searchPlaceholder: "ابحث عن قيود اليومية...",
     pageTitle: "قيود اليومية",
-    pageSubtitle: "متابعة الحركات المحاسبية بكل وضوح.",
+    pageSubtitle: "قيود يدوية لنقل المبالغ بين الإيرادات والمصروفات فقط.",
     summaryTitle: "ملخص القيود",
     summarySubtitle: "نظرة سريعة على آخر الحركات",
     filtersTitle: "الفلاتر",
@@ -306,13 +309,12 @@ const contentMap: Record<Language, Content> = {
     modal: {
       titleCreate: "قيد يومية جديد",
       titleEdit: "تعديل قيد اليومية",
-      subtitle: "أضف بيانات القيد وبنود القيد.",
+      subtitle: "القيود اليدوية تُستخدم فقط لنقل مبالغ بين الإيرادات والمصروفات.",
       date: "تاريخ القيد",
       referenceType: "نوع المرجع",
       memo: "البيان",
       linesTitle: "بنود القيد",
       account: "الحساب",
-      costCenter: "مركز التكلفة",
       description: "الوصف",
       debit: "مدين",
       credit: "دائن",
@@ -335,6 +337,10 @@ const contentMap: Record<Language, Content> = {
       { value: "expense", label: "مصروف" },
       { value: "adjustment", label: "تسوية" },
     ],
+    typeLabels: {
+      INCOME: "إيرادات",
+      EXPENSE: "مصروفات",
+    },
     nav: {
       dashboard: "لوحة التحكم",
       users: "المستخدمون",
@@ -350,14 +356,13 @@ const contentMap: Record<Language, Content> = {
       policies: "السياسات",
       hrActions: "إجراءات الموارد البشرية",
       payroll: "الرواتب",
-      accountingSetup: "إعداد المحاسبة",
       journalEntries: "قيود اليومية",
       expenses: "المصروفات",
       collections: "التحصيلات",
       trialBalance: "ميزان المراجعة",
       generalLedger: "دفتر الأستاذ",
       profitLoss: "الأرباح والخسائر",
-      balanceSheet: "الميزانية العمومية",
+      balanceSheet: "ملخص الإيرادات والمصروفات",
       agingReport: "أعمار الديون",
       customers: "العملاء",
       newCustomer: "عميل جديد",
@@ -413,7 +418,6 @@ export function JournalEntriesPage() {
     Array<{
       id: number;
       accountId: string;
-      costCenterId: string;
       description: string;
       debit: string;
       credit: string;
@@ -539,12 +543,6 @@ export function JournalEntriesPage() {
         label: content.nav.payroll,
         icon: "💸",
         permissions: ["hr.payroll.view", "hr.payroll.*"],
-      },
-      {
-        path: "/accounting/setup",
-        label: content.nav.accountingSetup,
-        icon: "⚙️",
-        permissions: ["accounting.manage_coa", "accounting.*"],
       },
       {
         path: "/accounting/journal-entries",
@@ -676,27 +674,28 @@ export function JournalEntriesPage() {
 
   const entriesQuery = useJournalEntries(filters);
   const accountsQuery = useAccounts();
-  const costCentersQuery = useCostCenters();
   const createEntry = useCreateJournalEntry();
   const updateEntry = useUpdateJournalEntry();
   const deleteEntry = useDeleteJournalEntry();
 
+  const typeLabel = useCallback(
+    (type: string) =>
+      type === "INCOME"
+        ? content.typeLabels.INCOME
+        : type === "EXPENSE"
+          ? content.typeLabels.EXPENSE
+          : type,
+    [content.typeLabels]
+  );
+
+  // النظام المبسط: حساب واحد بالضبط من كل نوع (INCOME / EXPENSE).
   const accountOptions = useMemo(
     () =>
       (accountsQuery.data ?? []).map((account) => ({
         value: String(account.id),
-        label: `${account.code} - ${account.name}`,
+        label: typeLabel(account.type),
       })),
-    [accountsQuery.data]
-  );
-
-  const costCenterOptions = useMemo(
-    () =>
-      (costCentersQuery.data ?? []).map((center) => ({
-        value: String(center.id),
-        label: `${center.code} - ${center.name}`,
-      })),
-    [costCentersQuery.data]
+    [accountsQuery.data, typeLabel]
   );
 
   const totalEntries = entriesQuery.data?.length ?? 0;
@@ -762,7 +761,6 @@ export function JournalEntriesPage() {
       {
         id: nextLineId(),
         accountId: "",
-        costCenterId: "",
         description: "",
         debit: "",
         credit: "",
@@ -786,7 +784,6 @@ export function JournalEntriesPage() {
       entry.lines.map((line) => ({
         id: nextLineId(),
         accountId: String(line.account.id),
-        costCenterId: line.cost_center ? String(line.cost_center.id) : "",
         description: line.description || "",
         debit: line.debit ?? "",
         credit: line.credit ?? "",
@@ -797,7 +794,7 @@ export function JournalEntriesPage() {
 
   const updateLine = (
     id: number,
-    field: "accountId" | "costCenterId" | "description" | "debit" | "credit",
+    field: "accountId" | "description" | "debit" | "credit",
     value: string
   ) => {
     setFormLines((prev) =>
@@ -857,7 +854,6 @@ export function JournalEntriesPage() {
       }
       payloadLines.push({
         account: Number(line.accountId),
-        cost_center: line.costCenterId ? Number(line.costCenterId) : null,
         description: line.description,
         debit: debitValue.toFixed(2),
         credit: creditValue.toFixed(2),
@@ -1268,7 +1264,6 @@ export function JournalEntriesPage() {
                       {
                         id: nextLineId(),
                         accountId: "",
-                        costCenterId: "",
                         description: "",
                         debit: "",
                         credit: "",
@@ -1285,7 +1280,6 @@ export function JournalEntriesPage() {
                   <thead>
                     <tr>
                       <th>{content.modal.account}</th>
-                      <th>{content.modal.costCenter}</th>
                       <th>{content.modal.description}</th>
                       <th>{content.modal.debit}</th>
                       <th>{content.modal.credit}</th>
@@ -1306,27 +1300,6 @@ export function JournalEntriesPage() {
                               {isArabic ? "اختر الحساب" : "Select account"}
                             </option>
                             {accountOptions.map((option) => (
-                              <option key={option.value} value={option.value}>
-                                {option.label}
-                              </option>
-                            ))}
-                          </select>
-                        </td>
-                        <td>
-                          <select
-                            value={line.costCenterId}
-                            onChange={(event) =>
-                              updateLine(
-                                line.id,
-                                "costCenterId",
-                                event.target.value
-                              )
-                            }
-                          >
-                            <option value="">
-                              {isArabic ? "بدون" : "None"}
-                            </option>
-                            {costCenterOptions.map((option) => (
                               <option key={option.value} value={option.value}>
                                 {option.label}
                               </option>

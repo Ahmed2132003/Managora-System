@@ -114,18 +114,14 @@ export const endpoints = {
     payrollRunPayslipPdf: (id: number) => api(`/payroll/runs/${id}/payslip.pdf`),
   },
 
+  // ملاحظة (Phase 7 - تبسيط نظام الحسابات):
+  // تم حذف accounting.mappings / mapping / mappingsBulkSet / costCenters /
+  // costCenter / applyTemplate بالكامل. النظام أصبح يحتوي حسابي INCOME و
+  // EXPENSE فقط، يُنشآن تلقائيًا عند تكوين الشركة (signal في الباك إند) -
+  // لا حاجة لأي شاشة ربط حسابات أو قوالب Chart of Accounts بعد الآن.
   accounting: {
     accounts: api("/accounting/accounts/"),
     account: (id: number) => api(`/accounting/accounts/${id}/`),
-
-    mappings: api("/accounting/mappings/"),
-    mapping: (id: number) => api(`/accounting/mappings/${id}/`),
-    mappingsBulkSet: api("/accounting/mappings/bulk-set/"),
-
-    costCenters: api("/accounting/cost-centers/"),
-    costCenter: (id: number) => api(`/accounting/cost-centers/${id}/`),
-
-    applyTemplate: api("/accounting/coa/apply-template/"),
 
     journalEntries: api("/accounting/journal-entries/"),
     journalEntry: (id: number) => api(`/accounting/journal-entries/${id}/`),

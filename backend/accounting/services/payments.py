@@ -1,18 +1,15 @@
 from decimal import Decimal
 
-from django.db import transaction
 from django.db.models import Sum
 from django.db.models.functions import Coalesce
 
-from accounting.models import AccountMapping, Invoice, JournalEntry, Payment
-from accounting.services.mappings import ensure_mapping_account
-from accounting.services.journal import post_journal_entry
+from accounting.models import Invoice, Payment
 
 
 def _update_invoice_status(invoice: Invoice):
     total_paid = (
         Payment.objects.filter(invoice=invoice)
-        .aggregate(total=Coalesce(Sum("amount"), Decimal("0")))        
+        .aggregate(total=Coalesce(Sum("amount"), Decimal("0")))
         .get("total")
         or Decimal("0")
     )
@@ -26,38 +23,17 @@ def _update_invoice_status(invoice: Invoice):
 
 
 def record_payment(payment: Payment):
-    receivable_account = ensure_mapping_account(        
-        payment.company, AccountMapping.Key.ACCOUNTS_RECEIVABLE
-    )
-    memo = payment.notes or f"Payment {payment.id}"
-    payload = {
-        "date": payment.payment_date,
-        "memo": memo,
-        "reference_type": JournalEntry.ReferenceType.PAYMENT,
-        "reference_id": str(payment.id),
-        "status": JournalEntry.Status.POSTED,
-        "lines": [
-            {
-                "account_id": payment.cash_account_id,
-                "description": memo,
-                "debit": payment.amount,
-                "credit": 0,
-            },
-            {
-                "account_id": receivable_account.id,
-                "description": memo,
-                "debit": 0,
-                "credit": payment.amount,
-            },
-        ],
-    }
+    """
+    تسجيل الدفعة لا ينتج أي قيد محاسبي (JournalEntry/JournalLine) في
+    النظام المبسط. الإيراد الفعلي سُجّل بالكامل على حساب INCOME عند
+    issue الفاتورة (انظر invoices.ensure_invoice_journal_entry). تسجيل
+    قيد إضافي هنا كان سيؤدي لاحتساب نفس الإيراد مرتين (double counting).
 
-    with transaction.atomic():
-        entry = post_journal_entry(
-            company=payment.company,
-            payload=payload,
-            created_by=payment.created_by,
-        )
-        if payment.invoice_id:
-            _update_invoice_status(payment.invoice)
-    return entry
+    وظيفة هذه الدالة الوحيدة الآن: تحديث حالة الفاتورة (مدفوعة/مدفوعة
+    جزئيًا) بناءً على إجمالي الدفعات المرتبطة بها، لأغراض تتبع التحصيل
+    والتقارير (Aging/Collections) فقط - بدون أي تأثير محاسبي على
+    INCOME/EXPENSE.
+    """
+    if payment.invoice_id:
+        _update_invoice_status(payment.invoice)
+    return None

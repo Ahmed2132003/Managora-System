@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { isForbiddenError } from "../../shared/api/errors";
 import { useAccounts, useGeneralLedger } from "../../shared/accounting/hooks";
@@ -58,6 +58,10 @@ type Content = {
     loading: string;
     empty: string;
   };
+  typeLabels: {
+    INCOME: string;
+    EXPENSE: string;
+  };
   actions: {
     exportCsv: string;
   };
@@ -76,7 +80,6 @@ type Content = {
     policies: string;
     hrActions: string;
     payroll: string;
-    accountingSetup: string;
     journalEntries: string;
     expenses: string;
     collections: string;
@@ -145,6 +148,10 @@ const contentMap: Record<Language, Content> = {
       loading: "Loading ledger lines...",
       empty: "Select an account and date range to view the ledger.",
     },
+    typeLabels: {
+      INCOME: "Income",
+      EXPENSE: "Expense",
+    },
     actions: {
       exportCsv: "Export CSV",
     },
@@ -163,14 +170,13 @@ const contentMap: Record<Language, Content> = {
       policies: "Policies",
       hrActions: "HR Actions",
       payroll: "Payroll",
-      accountingSetup: "Accounting Setup",
       journalEntries: "Journal Entries",
       expenses: "Expenses",
       collections: "Collections",
       trialBalance: "Trial Balance",
       generalLedger: "General Ledger",
       profitLoss: "Profit & Loss",
-      balanceSheet: "Balance Sheet",
+      balanceSheet: "Income & Expense Summary",
       agingReport: "AR Aging",
       customers: "Customers",
       newCustomer: "New Customer",
@@ -230,6 +236,10 @@ const contentMap: Record<Language, Content> = {
       loading: "جاري تحميل القيود...",
       empty: "اختر حسابًا وفترة لعرض القيود.",
     },
+    typeLabels: {
+      INCOME: "إيرادات",
+      EXPENSE: "مصروفات",
+    },
     actions: {
       exportCsv: "تصدير CSV",
     },
@@ -248,14 +258,13 @@ const contentMap: Record<Language, Content> = {
       policies: "السياسات",
       hrActions: "إجراءات الموارد البشرية",
       payroll: "الرواتب",
-      accountingSetup: "إعداد المحاسبة",
       journalEntries: "قيود اليومية",
       expenses: "المصروفات",
       collections: "التحصيلات",
       trialBalance: "ميزان المراجعة",
       generalLedger: "دفتر الأستاذ",
       profitLoss: "الأرباح والخسائر",
-      balanceSheet: "الميزانية العمومية",
+      balanceSheet: "ملخص الإيرادات والمصروفات",
       agingReport: "أعمار الديون",
       customers: "العملاء",
       newCustomer: "عميل جديد",
@@ -330,13 +339,24 @@ export function GeneralLedgerPage() {
     dateTo || undefined
   );
 
+  const typeLabel = useCallback(
+    (type: string) =>
+      type === "INCOME"
+        ? content.typeLabels.INCOME
+        : type === "EXPENSE"
+          ? content.typeLabels.EXPENSE
+          : type,
+    [content.typeLabels]
+  );
+
+  // النظام المبسط: حساب واحد بالضبط من كل نوع (INCOME / EXPENSE) لكل شركة.
   const accountOptions = useMemo(
     () =>
       (accountsQuery.data ?? []).map((account) => ({
         value: String(account.id),
-        label: `${account.code} - ${account.name}`,
+        label: typeLabel(account.type),
       })),
-    [accountsQuery.data]
+    [accountsQuery.data, typeLabel]
   );
 
   const filteredLines = useMemo(() => {
@@ -386,7 +406,6 @@ export function GeneralLedgerPage() {
       "Memo",
       "Reference Type",
       "Reference ID",
-      "Cost Center",
     ];
     const rows = ledgerQuery.data.lines.map((line) => [
       line.date,
@@ -397,10 +416,9 @@ export function GeneralLedgerPage() {
       line.memo || "-",
       line.reference_type,
       line.reference_id ?? "-",
-      line.cost_center ? `${line.cost_center.code} - ${line.cost_center.name}` : "-",
     ]);
     downloadCsv(
-      `general-ledger-${ledgerQuery.data.account.code}-${dateFrom || "start"}-${dateTo || "end"}.csv`,
+      `general-ledger-${typeLabel(ledgerQuery.data.account.type)}-${dateFrom || "start"}-${dateTo || "end"}.csv`,
       headers,
       rows
     );
@@ -493,12 +511,6 @@ export function GeneralLedgerPage() {
         label: content.nav.payroll,
         icon: "💸",
         permissions: ["hr.payroll.view", "hr.payroll.*"],
-      },
-      {
-        path: "/accounting/setup",
-        label: content.nav.accountingSetup,
-        icon: "⚙️",
-        permissions: ["accounting.manage_coa", "accounting.*"],
       },
       {
         path: "/accounting/journal-entries",

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { isForbiddenError } from "../../shared/api/errors";
 import { useTrialBalance } from "../../shared/accounting/hooks";
@@ -47,13 +47,15 @@ type Content = {
     dateTo: string;
   };
   table: {
-    account: string;
-    name: string;
     type: string;
     debit: string;
     credit: string;
     loading: string;
     empty: string;
+  };
+  typeLabels: {
+    INCOME: string;
+    EXPENSE: string;
   };
   actions: {
     exportCsv: string;
@@ -73,7 +75,6 @@ type Content = {
     policies: string;
     hrActions: string;
     payroll: string;
-    accountingSetup: string;
     journalEntries: string;
     expenses: string;
     collections: string;
@@ -112,13 +113,13 @@ const contentMap: Record<Language, Content> = {
     userFallback: "Explorer",
     searchPlaceholder: "Search trial balance...",
     pageTitle: "Trial Balance",
-    pageSubtitle: "Validate accounts at a glance and confirm balances.",
+    pageSubtitle: "Validate income and expense balances at a glance.",
     summaryTitle: "Trial Balance Snapshot",
-    summarySubtitle: "Totals across all accounts in the selected period.",
+    summarySubtitle: "Totals across income and expense for the selected period.",
     filtersTitle: "Filters",
     filtersSubtitle: "Choose a period to analyze the balance.",
     tableTitle: "Account balances",
-    tableSubtitle: "Debit and credit totals by account.",
+    tableSubtitle: "Debit and credit totals for income and expense.",
     rangeLabel: "Last 30 days",
     stats: {
       accounts: "Accounts",
@@ -131,13 +132,15 @@ const contentMap: Record<Language, Content> = {
       dateTo: "Date to",
     },
     table: {
-      account: "Account",
-      name: "Name",
       type: "Type",
       debit: "Debit",
       credit: "Credit",
       loading: "Loading trial balance...",
       empty: "No balances available for this period.",
+    },
+    typeLabels: {
+      INCOME: "Income",
+      EXPENSE: "Expense",
     },
     actions: {
       exportCsv: "Export CSV",
@@ -157,14 +160,13 @@ const contentMap: Record<Language, Content> = {
       policies: "Policies",
       hrActions: "HR Actions",
       payroll: "Payroll",
-      accountingSetup: "Accounting Setup",
       journalEntries: "Journal Entries",
       expenses: "Expenses",
       collections: "Collections",
       trialBalance: "Trial Balance",
       generalLedger: "General Ledger",
       profitLoss: "Profit & Loss",
-      balanceSheet: "Balance Sheet",
+      balanceSheet: "Income & Expense Summary",
       agingReport: "AR Aging",
       customers: "Customers",
       newCustomer: "New Customer",
@@ -194,13 +196,13 @@ const contentMap: Record<Language, Content> = {
     userFallback: "ضيف",
     searchPlaceholder: "ابحث في ميزان المراجعة...",
     pageTitle: "ميزان المراجعة",
-    pageSubtitle: "تحقق من توازن الحسابات بسهولة.",
+    pageSubtitle: "تحقق من توازن حسابي الإيرادات والمصروفات بسهولة.",
     summaryTitle: "ملخص ميزان المراجعة",
-    summarySubtitle: "إجمالي الأرصدة حسب الفترة المختارة.",
+    summarySubtitle: "إجمالي الإيرادات والمصروفات حسب الفترة المختارة.",
     filtersTitle: "الفلاتر",
     filtersSubtitle: "اختر الفترة لعرض الأرصدة.",
     tableTitle: "أرصدة الحسابات",
-    tableSubtitle: "إجمالي المدين والدائن لكل حساب.",
+    tableSubtitle: "إجمالي المدين والدائن للإيرادات والمصروفات.",
     rangeLabel: "آخر ٣٠ يوم",
     stats: {
       accounts: "الحسابات",
@@ -213,13 +215,15 @@ const contentMap: Record<Language, Content> = {
       dateTo: "إلى تاريخ",
     },
     table: {
-      account: "الحساب",
-      name: "الاسم",
       type: "النوع",
       debit: "مدين",
       credit: "دائن",
       loading: "جاري تحميل ميزان المراجعة...",
       empty: "لا توجد أرصدة في هذه الفترة.",
+    },
+    typeLabels: {
+      INCOME: "إيرادات",
+      EXPENSE: "مصروفات",
     },
     actions: {
       exportCsv: "تصدير CSV",
@@ -239,14 +243,13 @@ const contentMap: Record<Language, Content> = {
       policies: "السياسات",
       hrActions: "إجراءات الموارد البشرية",
       payroll: "الرواتب",
-      accountingSetup: "إعداد المحاسبة",
       journalEntries: "قيود اليومية",
       expenses: "المصروفات",
       collections: "التحصيلات",
       trialBalance: "ميزان المراجعة",
       generalLedger: "دفتر الأستاذ",
       profitLoss: "الأرباح والخسائر",
-      balanceSheet: "الميزانية العمومية",
+      balanceSheet: "ملخص الإيرادات والمصروفات",
       agingReport: "أعمار الديون",
       customers: "العملاء",
       newCustomer: "عميل جديد",
@@ -321,19 +324,24 @@ export function TrialBalancePage() {
     () => trialBalanceQuery.data ?? [],
     [trialBalanceQuery.data]
   );
+
+  const typeLabel = useCallback(
+    (type: string) =>
+      type === "INCOME"
+        ? content.typeLabels.INCOME
+        : type === "EXPENSE"
+          ? content.typeLabels.EXPENSE
+          : type,
+    [content.typeLabels]
+  );
+
   const filteredRows = useMemo(() => {
     const query = searchTerm.trim().toLowerCase();
     if (!query) {
-      return rows;      
+      return rows;
     }
-    return rows.filter((row) => {
-      return (
-        row.code.toLowerCase().includes(query) ||
-        row.name.toLowerCase().includes(query) ||
-        row.type.toLowerCase().includes(query)
-      );
-    });
-  }, [rows, searchTerm]);
+    return rows.filter((row) => typeLabel(row.type).toLowerCase().includes(query));
+  }, [rows, searchTerm, typeLabel]);
 
   const {
     page,
@@ -354,14 +362,8 @@ export function TrialBalancePage() {
   }, [rows]);
 
   function handleExport() {
-    const headers = ["Account Code", "Account Name", "Type", "Debit", "Credit"];
-    const dataRows = rows.map((row) => [
-      row.code,
-      row.name,
-      row.type,
-      row.debit,
-      row.credit,
-    ]);
+    const headers = ["Type", "Debit", "Credit"];
+    const dataRows = rows.map((row) => [typeLabel(row.type), row.debit, row.credit]);
     downloadCsv(
       `trial-balance-${dateFrom || "start"}-${dateTo || "end"}.csv`,
       headers,
@@ -456,12 +458,6 @@ export function TrialBalancePage() {
         label: content.nav.payroll,
         icon: "💸",
         permissions: ["hr.payroll.view", "hr.payroll.*"],
-      },
-      {
-        path: "/accounting/setup",
-        label: content.nav.accountingSetup,
-        icon: "⚙️",
-        permissions: ["accounting.manage_coa", "accounting.*"],
       },
       {
         path: "/accounting/journal-entries",
@@ -777,8 +773,6 @@ export function TrialBalancePage() {
                 <table className="data-table">
                   <thead>
                     <tr>
-                      <th>{content.table.account}</th>
-                      <th>{content.table.name}</th>
                       <th>{content.table.type}</th>
                       <th>{content.table.debit}</th>
                       <th>{content.table.credit}</th>
@@ -787,9 +781,7 @@ export function TrialBalancePage() {
                   <tbody>
                     {paginatedRows.map((row) => (
                       <tr key={row.account_id}>
-                        <td>{row.code}</td>
-                        <td>{row.name}</td>
-                        <td>{row.type}</td>
+                        <td>{typeLabel(row.type)}</td>
                         <td>{formatAmount(row.debit)}</td>
                         <td>{formatAmount(row.credit)}</td>
                       </tr>

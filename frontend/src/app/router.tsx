@@ -20,7 +20,6 @@ import { PoliciesPage } from "../modules/hr/policies/pages/PoliciesPage.tsx";
 import { HRActionsPage } from "../modules/hr/hr-actions/pages/HRActionsPage.tsx";
 import { PayrollPage } from "../modules/hr/payroll/pages/PayrollPage";
 import { PayrollPeriodDetailsPage } from "../modules/hr/payroll/period-details/pages/PayrollPeriodDetailsPage";
-import { AccountingSetupWizardPage } from "../pages/accounting/AccountingSetupWizardPage";
 import { JournalEntriesPage } from "../pages/accounting/JournalEntriesPage.tsx";
 import { JournalEntryDetailsPage } from "../pages/accounting/JournalEntryDetailsPage.tsx";
 import { ExpensesPage } from "../pages/accounting/ExpensesPage";
@@ -106,7 +105,6 @@ export const router = createBrowserRouter([
       { path: "hr/actions", element: <HRActionsPage /> },
       { path: "payroll", element: <PayrollPage /> },
       { path: "payroll/periods/:id", element: <PayrollPeriodDetailsPage /> },
-      { path: "accounting/setup", element: <AccountingSetupWizardPage /> },
       { path: "accounting/journal-entries", element: <JournalEntriesPage /> },
       { path: "accounting/journal-entries/:id", element: <JournalEntryDetailsPage /> },
       { path: "accounting/expenses", element: <ExpensesPage /> },

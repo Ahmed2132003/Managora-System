@@ -1,7 +1,6 @@
 import { useMemo, useState } from "react";
 import { DashboardShell } from "../DashboardShell";
 import "./SalesPage.css";
-import { useAccounts, useCostCenters } from "../../shared/accounting/hooks";
 import { useCatalogItems } from "../../shared/catalog/hooks";
 import { useCreateCustomer, useCustomers } from "../../shared/customers/hooks";
 import { useInvoices, useRecordSale } from "../../shared/invoices/hooks";
@@ -14,8 +13,6 @@ const INITIAL_ISSUE_DATE = new Date().toISOString().slice(0, 10);
 export function SalesPage() {
   const customers = useCustomers({});
   const catalog = useCatalogItems();
-  const accounts = useAccounts();
-  const costCenters = useCostCenters();
   const invoices = useInvoices();
   const createCustomer = useCreateCustomer();
   const recordSale = useRecordSale();
@@ -31,9 +28,9 @@ export function SalesPage() {
   const [taxRate, setTaxRate] = useState<number | string>("");  
   const [notes, setNotes] = useState("");
 
-  const [expenseAccount, setExpenseAccount] = useState("");
-  const [paidFromAccount, setPaidFromAccount] = useState("");
-  const [costCenter, setCostCenter] = useState("");
+  // ملاحظة (Phase 7 - تبسيط نظام الحسابات): expense_account/paid_from_account/
+  // cost_center لم تعد تُرسَل من الفرونت إند - الباك إند يحدد حساب EXPENSE
+  // الموحد للشركة تلقائيًا دائمًا (انظر InvoiceViewSet.record_sale في Phase 5).
   const [paymentMethod, setPaymentMethod] = useState("auto");
   const [expenseVendorName, setExpenseVendorName] = useState("");
   const [savedInvoiceDateFilter, setSavedInvoiceDateFilter] = useState("");
@@ -85,9 +82,6 @@ export function SalesPage() {
       tax_amount: taxAmountValue.toFixed(2),      
       notes,
       items: lines.map((l) => ({ item: Number(l.item), quantity: l.quantity, unit_price: l.unit_price })),
-      expense_account: expenseAccount ? Number(expenseAccount) : undefined,
-      paid_from_account: paidFromAccount ? Number(paidFromAccount) : undefined,
-      cost_center: costCenter ? Number(costCenter) : undefined,
       payment_method: paymentMethod,
       expense_vendor_name: expenseVendorName,
     });
@@ -195,18 +189,6 @@ export function SalesPage() {
           <section className="panel">
             <div className="panel__header"><h2>{language === "ar" ? "تكامل المصروف" : "Expense integration"}</h2></div>
             <div className="filters-grid">
-              <label className="sales-page__input-group"><span>{language === "ar" ? "حساب المصروف" : "Expense account"}</span><select value={expenseAccount} onChange={(e) => setExpenseAccount(e.target.value)}>
-                <option value="">{language === "ar" ? "حساب المصروف" : "Expense account"}</option>
-                {(accounts.data ?? []).map((a) => <option key={a.id} value={a.id}>{a.code} - {a.name}</option>)}
-              </select></label>
-              <label className="sales-page__input-group"><span>{language === "ar" ? "حساب السداد" : "Paid from account"}</span><select value={paidFromAccount} onChange={(e) => setPaidFromAccount(e.target.value)}>
-                <option value="">{language === "ar" ? "حساب السداد" : "Paid from account"}</option>
-                {(accounts.data ?? []).map((a) => <option key={a.id} value={a.id}>{a.code} - {a.name}</option>)}
-              </select></label>
-              <label className="sales-page__input-group"><span>{language === "ar" ? "مركز التكلفة" : "Cost center"}</span><select value={costCenter} onChange={(e) => setCostCenter(e.target.value)}>
-                <option value="">{language === "ar" ? "مركز التكلفة" : "Cost center"}</option>
-                {(costCenters.data ?? []).map((c) => <option key={c.id} value={c.id}>{c.code} - {c.name}</option>)}
-              </select></label>
               <label className="sales-page__input-group"><span>{language === "ar" ? "طريقة السداد" : "Payment method"}</span><input value={paymentMethod} onChange={(e) => setPaymentMethod(e.target.value)} placeholder={language === "ar" ? "طريقة السداد" : "Payment method"} /></label>
               <label className="sales-page__input-group"><span>{language === "ar" ? "المورد/الجهة" : "Vendor / provider"}</span><input value={expenseVendorName} onChange={(e) => setExpenseVendorName(e.target.value)} placeholder={language === "ar" ? "المورد/الجهة" : "Vendor / provider"} /></label>
             </div>

@@ -5,7 +5,7 @@ from decimal import Decimal
 from django.core.exceptions import ValidationError
 from django.db import transaction
 
-from accounting.models import Account, CostCenter, JournalEntry, JournalLine
+from accounting.models import Account, JournalEntry, JournalLine
 
 
 BALANCE_TOLERANCE = Decimal("0.01")
@@ -26,20 +26,6 @@ def post_journal_entry(company, payload, created_by=None):
     if len(accounts) != len(account_ids):
         raise ValidationError("Account must belong to the same company.")
 
-    cost_center_ids = {
-        line.get("cost_center_id")
-        for line in lines_payload
-        if line.get("cost_center_id")
-    }
-    cost_centers = {
-        cost_center.id: cost_center
-        for cost_center in CostCenter.objects.filter(
-            company=company, id__in=cost_center_ids
-        )
-    }
-    if len(cost_centers) != len(cost_center_ids):
-        raise ValidationError("Cost center must belong to the same company.")
-
     total_debit = Decimal("0")
     total_credit = Decimal("0")
     normalized_lines = []
@@ -58,7 +44,6 @@ def post_journal_entry(company, payload, created_by=None):
         normalized_lines.append(
             {
                 "account_id": line["account_id"],
-                "cost_center_id": line.get("cost_center_id"),
                 "description": line.get("description", ""),
                 "debit": debit,
                 "credit": credit,
@@ -84,9 +69,6 @@ def post_journal_entry(company, payload, created_by=None):
                     company=company,
                     entry=entry,
                     account=accounts[line["account_id"]],
-                    cost_center=cost_centers.get(line["cost_center_id"])
-                    if line.get("cost_center_id")
-                    else None,
                     description=line["description"],
                     debit=line["debit"],
                     credit=line["credit"],

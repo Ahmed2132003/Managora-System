@@ -6,13 +6,13 @@ import { hasPermission } from "../../shared/auth/useCan";
 import { getAllowedPathsForRole } from "../../shared/auth/roleAccess";
 import { resolvePrimaryRole } from "../../shared/auth/roleNavigation";
 import {
-  useAccountMappings,
-  useAccounts,
   useExpenses,
-  useGeneralLedger,
   useProfitLoss,
 } from "../../shared/accounting/hooks";
 import { useCustomers } from "../../shared/customers/hooks";
+import { http } from "../../shared/api/http";
+import { endpoints } from "../../shared/api/endpoints";
+import { useQuery } from "@tanstack/react-query";
 import { buildRangeSelection } from "../../shared/analytics/range.ts";
 import type { RangeOption } from "../../shared/analytics/range.ts";
 import { formatCurrency, formatNumber } from "../../shared/analytics/format.ts";
@@ -345,8 +345,6 @@ export function FinanceDashboardPage() {
     [range, customStart, customEnd]
   );
 
-  const accountsQuery = useAccounts();
-  const accountMappingsQuery = useAccountMappings();
   const expensesQuery = useExpenses({
     dateFrom: selection.start,
     dateTo: selection.end,
@@ -354,47 +352,39 @@ export function FinanceDashboardPage() {
   const customersQuery = useCustomers({});
   const pnlQuery = useProfitLoss(selection.start, selection.end);
 
-  const receivablesAccountId = useMemo(() => {
-    const mapping = accountMappingsQuery.data?.find(
-      (item) => item.key === "ACCOUNTS_RECEIVABLE"      
-    );
-    if (mapping?.account) {
-      return mapping.account;
-    }
-    const accounts = accountsQuery.data ?? [];
-    const receivablesAccount = accounts.find((account) => {
-      const name = account.name.toLowerCase();
-      return (
-        name.includes("receivable") ||
-        name.includes("ذمم") ||
-        name.includes("مدينة")
-      );
-    });
-    return receivablesAccount?.id;
-  }, [accountMappingsQuery.data, accountsQuery.data]);
+  // ملاحظة (Phase 7 - تبسيط نظام الحسابات): لا يوجد حساب "ذمم مدينة" (AR)
+  // بعد الآن (AccountMapping وAccount.name محذوفان بالكامل). الرصيد المفتوح
+  // الفعلي يُحسَب مباشرة من إجمالي remaining_balance لكل الفواتير غير
+  // المدفوعة بالكامل (issued/partially_paid)، وهو حقل جاهز ومحسوب تلقائيًا
+  // في InvoiceSerializer بدون أي اعتماد على حسابات محاسبية إضافية.
+  type OpenInvoiceRow = {
+    id: number;
+    status: string;
+    remaining_balance: string | number;
+  };
 
-  const receivablesLedgerQuery = useGeneralLedger(
-    receivablesAccountId,
-    selection.start,
-    selection.end
-  );
-  
+  const openInvoicesQuery = useQuery({
+    queryKey: ["finance-dashboard-open-invoices"],
+    queryFn: async () => {
+      const response = await http.get<OpenInvoiceRow[]>(endpoints.invoices);
+      return response.data;
+    },
+  });
+
   const receivablesBalance = useMemo(() => {
-    const lines = receivablesLedgerQuery.data?.lines ?? [];
-    if (lines.length === 0) {
+    const invoices = openInvoicesQuery.data ?? [];
+    const openInvoices = invoices.filter(
+      (invoice) => invoice.status === "issued" || invoice.status === "partially_paid"
+    );
+    if (openInvoices.length === 0) {
       return null;
     }
-    const filteredLines = lines.filter((line) => {
-      const description = `${line.description ?? ""} ${line.memo ?? ""}`.toLowerCase();
-      return !description.includes("سلف") && !description.includes("advance");
-    });
-    const balance = filteredLines.reduce((sum, line) => {
-      const debit = Number(line.debit ?? 0);
-      const credit = Number(line.credit ?? 0);
-      return sum + (debit - credit);
-    }, 0);
-    return formatNumber(String(Math.abs(balance)));    
-  }, [receivablesLedgerQuery.data?.lines]);
+    const total = openInvoices.reduce(
+      (sum, invoice) => sum + Math.abs(Number(invoice.remaining_balance ?? 0)),
+      0
+    );
+    return formatNumber(String(total));
+  }, [openInvoicesQuery.data]);
 
   const pnlTotals = useMemo(() => {
     const incomeTotal = Math.abs(Number(pnlQuery.data?.income_total ?? 0));
@@ -887,7 +877,7 @@ export function FinanceDashboardPage() {
                 {
                   label: content.page.stats.receivables,
                   value: receivablesBalance ?? "-",
-                  isLoading: receivablesLedgerQuery.isLoading,
+                  isLoading: openInvoicesQuery.isLoading,
                 },
                 {
                   label: content.page.stats.expenseAlert,
