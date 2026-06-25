@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { isForbiddenError } from "../../shared/api/errors";
-import { useCumulativeBalanceSummary } from "../../shared/accounting/hooks";
+import { useCumulativeBalanceSummary, useProfitLoss } from "../../shared/accounting/hooks";
 import { hasPermission } from "../../shared/auth/useCan";
 import { getAllowedPathsForRole } from "../../shared/auth/roleAccess";
 import { resolvePrimaryRole } from "../../shared/auth/roleNavigation";
@@ -29,10 +29,24 @@ type Content = {
   pageTitle: string;
   pageSubtitle: string;
   filtersTitle: string;
+  modeLabel: string;
+  modeCumulative: string;
+  modeRange: string;
   asOfLabel: string;
+  dateFromLabel: string;
+  dateToLabel: string;
   loading: string;
   empty: string;
+  emptyRange: string;
   cards: {
+    income: string;
+    incomeHelper: string;
+    expense: string;
+    expenseHelper: string;
+    net: string;
+    netHelper: string;
+  };
+  cardsRange: {
     income: string;
     incomeHelper: string;
     expense: string;
@@ -96,9 +110,15 @@ const contentMap: Record<Language, Content> = {
     pageSubtitle:
       "A cumulative summary of all revenue and expenses since the company started, up to the selected date.",
     filtersTitle: "Report filters",
+    modeLabel: "View",
+    modeCumulative: "Cumulative (since inception)",
+    modeRange: "Date range",
     asOfLabel: "As of",
+    dateFromLabel: "Date from",
+    dateToLabel: "Date to",
     loading: "Loading summary…",
     empty: "Select a date to view the cumulative summary.",
+    emptyRange: "Select a date range to view income and expenses for that period.",
     cards: {
       income: "Cumulative income",
       incomeHelper: "Total revenue recognized since inception up to this date.",
@@ -106,6 +126,14 @@ const contentMap: Record<Language, Content> = {
       expenseHelper: "Total expenses recorded since inception up to this date.",
       net: "Net balance",
       netHelper: "Cumulative income minus cumulative expense.",
+    },
+    cardsRange: {
+      income: "Income (period)",
+      incomeHelper: "Total revenue recognized within the selected date range.",
+      expense: "Expense (period)",
+      expenseHelper: "Total expenses recorded within the selected date range.",
+      net: "Net profit (period)",
+      netHelper: "Income minus expense for the selected date range.",
     },
     nav: {
       dashboard: "Dashboard",
@@ -161,9 +189,15 @@ const contentMap: Record<Language, Content> = {
     pageSubtitle:
       "ملخص تراكمي لكل الإيرادات والمصروفات منذ تأسيس الشركة وحتى التاريخ المحدد.",
     filtersTitle: "فلاتر التقرير",
+    modeLabel: "طريقة العرض",
+    modeCumulative: "تراكمي (منذ التأسيس)",
+    modeRange: "فترة محددة",
     asOfLabel: "حتى تاريخ",
+    dateFromLabel: "من تاريخ",
+    dateToLabel: "إلى تاريخ",
     loading: "جاري تحميل الملخص…",
     empty: "اختر تاريخًا لعرض الملخص التراكمي.",
+    emptyRange: "اختر فترة (من تاريخ - إلى تاريخ) لعرض الإيرادات والمصروفات خلالها.",
     cards: {
       income: "إجمالي الإيرادات التراكمي",
       incomeHelper: "إجمالي الإيرادات المسجّلة منذ التأسيس حتى هذا التاريخ.",
@@ -171,6 +205,14 @@ const contentMap: Record<Language, Content> = {
       expenseHelper: "إجمالي المصروفات المسجّلة منذ التأسيس حتى هذا التاريخ.",
       net: "الصافي",
       netHelper: "إجمالي الإيرادات التراكمي ناقص إجمالي المصروفات التراكمي.",
+    },
+    cardsRange: {
+      income: "الإيرادات (خلال الفترة)",
+      incomeHelper: "إجمالي الإيرادات المسجّلة خلال الفترة المحددة فقط.",
+      expense: "المصروفات (خلال الفترة)",
+      expenseHelper: "إجمالي المصروفات المسجّلة خلال الفترة المحددة فقط.",
+      net: "صافي الربح (خلال الفترة)",
+      netHelper: "الإيرادات ناقص المصروفات خلال الفترة المحددة.",
     },
     nav: {
       dashboard: "لوحة التحكم",
@@ -232,6 +274,9 @@ export function BalanceSheetPage() {
     return stored === "light" || stored === "dark" ? stored : "light";
   });
   const [asOf, setAsOf] = useState("");
+  const [mode, setMode] = useState<"cumulative" | "range">("cumulative");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
 
   const content = useMemo(() => contentMap[language], [language]);
@@ -252,7 +297,11 @@ export function BalanceSheetPage() {
     window.localStorage.setItem("managora-theme", theme);
   }, [theme]);
 
-  const summaryQuery = useCumulativeBalanceSummary(asOf || undefined);
+  const summaryQuery = useCumulativeBalanceSummary(mode === "cumulative" ? asOf || undefined : undefined);
+  const profitLossQuery = useProfitLoss(
+    mode === "range" ? dateFrom || undefined : undefined,
+    mode === "range" ? dateTo || undefined : undefined
+  );
 
   const navLinks = useMemo(
     () => [
@@ -449,7 +498,10 @@ export function BalanceSheetPage() {
     });
   }, [allowedRolePaths, appRole, navLinks, userPermissions]);
 
-  if (summaryQuery.error && isForbiddenError(summaryQuery.error)) {
+  if (
+    (summaryQuery.error && isForbiddenError(summaryQuery.error)) ||
+    (profitLossQuery.error && isForbiddenError(profitLossQuery.error))
+  ) {
     return <AccessDenied />;
   }
 
@@ -562,43 +614,108 @@ export function BalanceSheetPage() {
             </div>
             <div className="filters-grid">
               <label className="field">
-                <span>{content.asOfLabel}</span>
-                <input type="date" value={asOf} onChange={(e) => setAsOf(e.target.value)} />
+                <span>{content.modeLabel}</span>
+                <select
+                  value={mode}
+                  onChange={(e) => setMode(e.target.value as "cumulative" | "range")}
+                >
+                  <option value="cumulative">{content.modeCumulative}</option>
+                  <option value="range">{content.modeRange}</option>
+                </select>
               </label>
+              {mode === "cumulative" ? (
+                <label className="field">
+                  <span>{content.asOfLabel}</span>
+                  <input type="date" value={asOf} onChange={(e) => setAsOf(e.target.value)} />
+                </label>
+              ) : (
+                <>
+                  <label className="field">
+                    <span>{content.dateFromLabel}</span>
+                    <input
+                      type="date"
+                      value={dateFrom}
+                      onChange={(e) => setDateFrom(e.target.value)}
+                    />
+                  </label>
+                  <label className="field">
+                    <span>{content.dateToLabel}</span>
+                    <input
+                      type="date"
+                      value={dateTo}
+                      onChange={(e) => setDateTo(e.target.value)}
+                    />
+                  </label>
+                </>
+              )}
             </div>
           </section>
 
-          {summaryQuery.isLoading ? (
+          {mode === "cumulative" ? (
+            summaryQuery.isLoading ? (
+              <section className="panel">
+                <p className="helper-text">{content.loading}</p>
+              </section>
+            ) : summaryQuery.data ? (
+              <section className="hero-panel__stats">
+                <div className="stat-card">
+                  <div className="stat-card__top">
+                    <span>{content.cards.income}</span>
+                  </div>
+                  <strong>{formatAmount(summaryQuery.data.cumulative_income)}</strong>
+                  <p className="helper-text">{content.cards.incomeHelper}</p>
+                </div>
+                <div className="stat-card">
+                  <div className="stat-card__top">
+                    <span>{content.cards.expense}</span>
+                  </div>
+                  <strong>{formatAmount(summaryQuery.data.cumulative_expense)}</strong>
+                  <p className="helper-text">{content.cards.expenseHelper}</p>
+                </div>
+                <div className="stat-card">
+                  <div className="stat-card__top">
+                    <span>{content.cards.net}</span>
+                  </div>
+                  <strong>{formatAmount(summaryQuery.data.net_balance)}</strong>
+                  <p className="helper-text">{content.cards.netHelper}</p>
+                </div>
+              </section>
+            ) : (
+              <section className="panel">
+                <p className="helper-text">{content.empty}</p>
+              </section>
+            )
+          ) : profitLossQuery.isLoading ? (
             <section className="panel">
               <p className="helper-text">{content.loading}</p>
             </section>
-          ) : summaryQuery.data ? (
+          ) : profitLossQuery.data ? (
             <section className="hero-panel__stats">
               <div className="stat-card">
                 <div className="stat-card__top">
-                  <span>{content.cards.income}</span>
+                  <span>{content.cardsRange.income}</span>
                 </div>
-                <strong>{formatAmount(summaryQuery.data.cumulative_income)}</strong>
-                <p className="helper-text">{content.cards.incomeHelper}</p>
+                <strong>{formatAmount(profitLossQuery.data.income_total)}</strong>
+                <p className="helper-text">{content.cardsRange.incomeHelper}</p>
               </div>
               <div className="stat-card">
                 <div className="stat-card__top">
-                  <span>{content.cards.expense}</span>
+                  <span>{content.cardsRange.expense}</span>
                 </div>
-                <strong>{formatAmount(summaryQuery.data.cumulative_expense)}</strong>
-                <p className="helper-text">{content.cards.expenseHelper}</p>
+                <strong>{formatAmount(profitLossQuery.data.expense_total)}</strong>
+                <p className="helper-text">{content.cardsRange.expenseHelper}</p>
               </div>
               <div className="stat-card">
                 <div className="stat-card__top">
-                  <span>{content.cards.net}</span>
+                  <span>{content.cardsRange.net}</span>
                 </div>
-                <strong>{formatAmount(summaryQuery.data.net_balance)}</strong>
-                <p className="helper-text">{content.cards.netHelper}</p>
+                <strong>{formatAmount(profitLossQuery.data.net_profit)}</strong>
+                <p className="helper-text">{content.cardsRange.netHelper}</p>
               </div>
             </section>
           ) : (
             <section className="panel">
-              <p className="helper-text">{content.empty}</p>
+              <p className="helper-text">{content.emptyRange}</p>
             </section>
           )}
         </main>
