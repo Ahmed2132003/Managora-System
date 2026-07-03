@@ -5,6 +5,7 @@ import { LoginPage } from "../modules/auth/pages/LoginPage.tsx";
 import { DashboardPage } from "../modules/dashboard/pages/DashboardPage.tsx";
 import { UsersPage } from "../modules/users/pages/UsersPage.tsx";
 import { RequireAuth } from "./RequireAuth";
+import { RequireSuperUser } from "./RequireSuperUser";
 import { RoleHomeRedirect } from "./RoleHomeRedirect";
 import { EmployeesPage } from "../modules/hr/employees/pages/EmployeesPage.tsx";
 import { EmployeeProfilePage } from "../modules/hr/employee-profile/pages/EmployeeProfilePage.tsx";
@@ -38,12 +39,21 @@ import { SetupWizardPage } from "../pages/setup/SetupWizardPage";
 import { SetupTemplatesPage } from "../pages/setup/SetupTemplatesPage";
 import { SetupProgressPage } from "../pages/setup/SetupProgressPage";
 import { AuditLogsPage } from "../pages/admin/AuditLogsPage";
-import { AdminPanelPage } from "../pages/admin/AdminPanelPage";
 import { CatalogPage } from "../pages/catalog/CatalogPage";
 import { SalesPage } from "../pages/catalog/SalesPage.tsx";
 import { EmployeeSelfServicePage } from "../pages/accounting/employee/EmployeeSelfServicePage";
 import { MessagesPage } from "../pages/communication/MessagesPage.tsx";
 import { SuperAdminPage } from "../pages/admin/SuperAdminPage";
+
+// ── SuperAdmin Shell & Pages ───────────────────────────────────────────────
+import { SuperAdminShellPage } from "../pages/superadmin/SuperAdminShellPage";
+import { SuperAdminCompaniesPage } from "../pages/superadmin/SuperAdminCompaniesPage";
+import { SuperAdminUsersPage } from "../pages/superadmin/SuperAdminUsersPage";
+import { SuperAdminRolesPage } from "../pages/superadmin/SuperAdminRolesPage";
+import { SuperAdminDashboardPage } from "../pages/superadmin/SuperAdminDashboardPage";
+import { SuperAdminSubscriptionsPage } from "../pages/superadmin/SuperAdminSubscriptionsPage";
+import { SuperAdminBackupsPage } from "../pages/superadmin/SuperAdminBackupsPage";
+import { SuperAdminAuditLogsPage } from "../pages/superadmin/SuperAdminAuditLogsPage";
 
 const TrialBalancePage = lazy(() =>
   import("../pages/accounting/TrialBalancePage.tsx").then((module) => ({
@@ -78,6 +88,27 @@ export const router = createBrowserRouter([
     path: "/login",
     element: <LoginPage />,
   },
+
+  // ── SuperAdmin Panel (محمي بـ RequireSuperUser) ────────────────────────
+  {
+    path: "/superadmin",
+    element: (
+      <RequireSuperUser>
+        <SuperAdminShellPage />
+      </RequireSuperUser>
+    ),
+    children: [
+      { index: true, element: <SuperAdminDashboardPage /> },
+      { path: "companies", element: <SuperAdminCompaniesPage /> },
+      { path: "users", element: <SuperAdminUsersPage /> },
+      { path: "roles", element: <SuperAdminRolesPage /> },
+      { path: "subscriptions", element: <SuperAdminSubscriptionsPage /> },
+      { path: "backups", element: <SuperAdminBackupsPage /> },
+      { path: "audit-logs", element: <SuperAdminAuditLogsPage /> },
+    ],
+  },
+
+  // ── Main App (محمي بـ RequireAuth) ────────────────────────────────────
   {
     path: "/",
     element: (
@@ -99,14 +130,17 @@ export const router = createBrowserRouter([
       { path: "hr/employees/:id", element: <EmployeeProfilePage /> },
       { path: "hr/departments", element: <DepartmentsPage /> },
       { path: "hr/job-titles", element: <JobTitlesPage /> },
-      { path: "hr/attendance", element: <AttendancePage /> },      
+      { path: "hr/attendance", element: <AttendancePage /> },
       { path: "hr/leaves/inbox", element: <LeaveInboxPage /> },
       { path: "hr/policies", element: <PoliciesPage /> },
       { path: "hr/actions", element: <HRActionsPage /> },
       { path: "payroll", element: <PayrollPage /> },
       { path: "payroll/periods/:id", element: <PayrollPeriodDetailsPage /> },
       { path: "accounting/journal-entries", element: <JournalEntriesPage /> },
-      { path: "accounting/journal-entries/:id", element: <JournalEntryDetailsPage /> },
+      {
+        path: "accounting/journal-entries/:id",
+        element: <JournalEntryDetailsPage />,
+      },
       { path: "accounting/expenses", element: <ExpensesPage /> },
       { path: "collections", element: <CollectionsPage /> },
       {
@@ -163,7 +197,8 @@ export const router = createBrowserRouter([
       { path: "analytics/ceo", element: <CEODashboardPage /> },
       { path: "analytics/finance", element: <FinanceDashboardPage /> },
       { path: "analytics/hr", element: <HRDashboardPage /> },
-      { path: "admin", element: <AdminPanelPage /> },
+      // ── "admin" القديمة اتشالت واستُبدلت بتحويل مباشر للوحة السوبر أدمن الجديدة ──
+      { path: "admin", element: <Navigate to="/superadmin" replace /> },
       { path: "admin/audit-logs", element: <AuditLogsPage /> },
       {
         path: "setup",
@@ -177,6 +212,7 @@ export const router = createBrowserRouter([
       },
     ],
   },
+
   {
     path: "*",
     element: <Navigate to="/login" replace />,

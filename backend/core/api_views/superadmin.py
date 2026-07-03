@@ -1,10 +1,12 @@
-
 from __future__ import annotations
 
 from datetime import timedelta
+from pathlib import Path
 
 from django.db import transaction
 from django.db.models import Count, Q
+from django.http import FileResponse, Http404
+from django.urls import reverse
 from django.utils import timezone
 from drf_spectacular.utils import extend_schema
 from rest_framework import serializers as drf_serializers
@@ -17,13 +19,17 @@ from rest_framework.viewsets import ModelViewSet
 from core.models import (
     AuditLog,
     Company,
+    CompanyBackup,
     CompanySubscriptionCode,
+    Permission,
     Role,
     User,
 )
-from core.permissions import is_admin_user
+from core.permissions import PERMISSION_DEFINITIONS, is_admin_user
 from core.serializers.companies import CompanySerializer
+from core.serializers.subscriptions import GenerateSubscriptionCodeSerializer
 from core.serializers.users import UserCreateSerializer, UserSerializer, UserUpdateSerializer
+from core.services.company_backups import restore_company_backup
 
 
 # ──────────────────────────────────────────────
@@ -168,6 +174,94 @@ class SuperadminUserCreateSerializer(drf_serializers.ModelSerializer):
                 roles = Role.objects.filter(id__in=role_ids)
                 user.roles.set(roles)
         return user
+
+
+# ──────────────────────────────────────────────
+# Roles & Permissions Serializers (سوبر أدمن - عابر للشركات)
+# ──────────────────────────────────────────────
+
+class PermissionSerializer(drf_serializers.ModelSerializer):
+    """صلاحية فعلية موجودة في قاعدة البيانات (موديل Permission)."""
+
+    class Meta:
+        model = Permission
+        fields = ("id", "code", "name", "created_at")
+
+
+class RolePermissionInlineSerializer(drf_serializers.ModelSerializer):
+    """تمثيل مصغّر للصلاحية عند عرضها داخل تفاصيل الدور."""
+
+    class Meta:
+        model = Permission
+        fields = ("id", "code", "name")
+
+
+class RoleDetailSerializer(drf_serializers.ModelSerializer):
+    """تفاصيل الدور + الشركة + الصلاحيات الكاملة (سوبر أدمن - عابر للشركات)."""
+
+    company_name = drf_serializers.CharField(source="company.name", read_only=True)
+    permissions = RolePermissionInlineSerializer(many=True, read_only=True)
+    permission_count = drf_serializers.SerializerMethodField()
+
+    class Meta:
+        model = Role
+        fields = (
+            "id",
+            "name",
+            "slug",
+            "company",
+            "company_name",
+            "permissions",
+            "permission_count",
+            "created_at",
+        )
+
+    def get_permission_count(self, obj):
+        return obj.permissions.count()
+
+
+class RoleCreateSerializer(drf_serializers.ModelSerializer):
+    """إنشاء دور جديد لشركة معينة، مع تعيين صلاحيات اختياري عند الإنشاء."""
+
+    permission_ids = drf_serializers.ListField(
+        child=drf_serializers.IntegerField(), required=False, write_only=True
+    )
+
+    class Meta:
+        model = Role
+        fields = ("company", "name", "permission_ids")
+
+    def create(self, validated_data):
+        permission_ids = validated_data.pop("permission_ids", [])
+        with transaction.atomic():
+            role = Role.objects.create(**validated_data)
+            if permission_ids:
+                permissions = Permission.objects.filter(id__in=permission_ids)
+                role.permissions.set(permissions)
+        return role
+
+
+class RoleUpdateSerializer(drf_serializers.ModelSerializer):
+    """تعديل اسم الدور و/أو قائمة الصلاحيات المرتبطة به بالكامل (استبدال كامل)."""
+
+    permission_ids = drf_serializers.ListField(
+        child=drf_serializers.IntegerField(), required=False, write_only=True
+    )
+
+    class Meta:
+        model = Role
+        fields = ("name", "permission_ids")
+
+    def update(self, instance, validated_data):
+        permission_ids = validated_data.pop("permission_ids", None)
+        with transaction.atomic():
+            for attr, value in validated_data.items():
+                setattr(instance, attr, value)
+            instance.save()
+            if permission_ids is not None:
+                permissions = Permission.objects.filter(id__in=permission_ids)
+                instance.permissions.set(permissions)
+        return instance
 
 
 # ──────────────────────────────────────────────
@@ -481,6 +575,338 @@ class SuperadminUserAssignRoleView(SuperuserOnly, APIView):
 
         target.roles.set([role])
         return Response(SuperadminUserSerializer(target).data)
+
+
+# ──────────────────────────────────────────────
+# Roles & Permissions Management (Cross-Company)
+# ──────────────────────────────────────────────
+
+class SuperadminRoleListCreateView(SuperuserOnly, APIView):
+    """
+    GET  /api/v1/superadmin/roles/   — كل الأدوار من كل الشركات
+    POST /api/v1/superadmin/roles/   — إنشاء دور جديد لشركة معينة
+    Query params: company, search
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(tags=["SuperAdmin"], summary="List all roles across companies")
+    def get(self, request):
+        self._assert_superuser(request)
+        qs = (
+            Role.objects.select_related("company")
+            .prefetch_related("permissions")
+            .order_by("company__name", "name")
+        )
+
+        company_id = request.query_params.get("company")
+        search = request.query_params.get("search")
+
+        if company_id:
+            qs = qs.filter(company_id=company_id)
+        if search:
+            qs = qs.filter(Q(name__icontains=search) | Q(slug__icontains=search))
+
+        serializer = RoleDetailSerializer(qs, many=True)
+        return Response(serializer.data)
+
+    @extend_schema(tags=["SuperAdmin"], summary="Create role for a company")
+    def post(self, request):
+        self._assert_superuser(request)
+        serializer = RoleCreateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        role = serializer.save()
+        return Response(RoleDetailSerializer(role).data, status=status.HTTP_201_CREATED)
+
+
+class SuperadminRoleDetailView(SuperuserOnly, APIView):
+    """
+    GET    /api/v1/superadmin/roles/<id>/
+    PATCH  /api/v1/superadmin/roles/<id>/   (يشمل تحديث قائمة الصلاحيات - استبدال كامل)
+    DELETE /api/v1/superadmin/roles/<id>/
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def _get_role(self, pk):
+        try:
+            return (
+                Role.objects.select_related("company")
+                .prefetch_related("permissions")
+                .get(pk=pk)
+            )
+        except Role.DoesNotExist:
+            from rest_framework.exceptions import NotFound
+            raise NotFound(f"Role {pk} not found.")
+
+    @extend_schema(tags=["SuperAdmin"], summary="Retrieve role")
+    def get(self, request, pk):
+        self._assert_superuser(request)
+        role = self._get_role(pk)
+        return Response(RoleDetailSerializer(role).data)
+
+    @extend_schema(tags=["SuperAdmin"], summary="Update role (incl. permissions)")
+    def patch(self, request, pk):
+        self._assert_superuser(request)
+        role = self._get_role(pk)
+        serializer = RoleUpdateSerializer(role, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        role.refresh_from_db()
+        return Response(RoleDetailSerializer(role).data)
+
+    @extend_schema(tags=["SuperAdmin"], summary="Delete role")
+    def delete(self, request, pk):
+        self._assert_superuser(request)
+        role = self._get_role(pk)
+        role_name = role.name
+        role.delete()
+        return Response(
+            {"detail": f"Role '{role_name}' deleted successfully."},
+            status=status.HTTP_204_NO_CONTENT,
+        )
+
+
+class SuperadminPermissionListView(SuperuserOnly, APIView):
+    """
+    GET /api/v1/superadmin/permissions/
+    يعرض كل الصلاحيات الموجودة فعليًا في موديل Permission (قاعدة البيانات) —
+    هي فقط القابلة للربط بأي دور عبر assign/update.
+
+    Query param اختياري: source=definitions
+    يرجع بدلاً من ذلك PERMISSION_DEFINITIONS كاملاً (القاموس الثابت في الكود)
+    لمقارنة ما هو معرّف في الكود مع ما هو مزروع فعليًا في قاعدة البيانات.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(tags=["SuperAdmin"], summary="List permissions")
+    def get(self, request):
+        self._assert_superuser(request)
+
+        if request.query_params.get("source") == "definitions":
+            data = [
+                {"code": code, "name": name}
+                for code, name in PERMISSION_DEFINITIONS.items()
+            ]
+            return Response(data)
+
+        qs = Permission.objects.order_by("code")
+        return Response(PermissionSerializer(qs, many=True).data)
+
+
+# ──────────────────────────────────────────────
+# Subscription Codes Management (Cross-Company)
+# ──────────────────────────────────────────────
+
+class SuperadminSubscriptionCodeSerializer(drf_serializers.ModelSerializer):
+    """عرض كود اشتراك مع اسم الشركة وحالة الاستخدام، عابر للشركات."""
+
+    company_name = drf_serializers.CharField(source="company.name", read_only=True)
+    is_used = drf_serializers.SerializerMethodField()
+
+    class Meta:
+        model = CompanySubscriptionCode
+        fields = (
+            "id",
+            "company",
+            "company_name",
+            "code",
+            "expires_at",
+            "used_at",
+            "is_used",
+            "created_at",
+        )
+
+    def get_is_used(self, obj):
+        return obj.used_at is not None
+
+
+class SuperadminSubscriptionCodeListView(SuperuserOnly, APIView):
+    """
+    GET /api/v1/superadmin/subscription-codes/
+    Query params: company, is_used, search
+    كل أكواد الاشتراك من كل الشركات.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(tags=["SuperAdmin"], summary="List subscription codes across companies")
+    def get(self, request):
+        self._assert_superuser(request)
+        qs = CompanySubscriptionCode.objects.select_related("company").order_by("-created_at")
+
+        company_id = request.query_params.get("company")
+        is_used = request.query_params.get("is_used")
+        search = request.query_params.get("search")
+
+        if company_id:
+            qs = qs.filter(company_id=company_id)
+        if is_used is not None:
+            used_val = str(is_used).lower() in {"true", "1", "yes"}
+            qs = qs.filter(used_at__isnull=not used_val)
+        if search:
+            qs = qs.filter(Q(code__icontains=search) | Q(company__name__icontains=search))
+
+        serializer = SuperadminSubscriptionCodeSerializer(qs, many=True)
+        return Response(serializer.data)
+
+
+class SuperadminGenerateSubscriptionCodeView(SuperuserOnly, APIView):
+    """
+    POST /api/v1/superadmin/subscription-codes/generate/
+    body: { "company_id": <int> }
+
+    نفس منطق GenerateCompanyPaymentCodeView الموجود فعليًا في
+    core/api_views/subscriptions.py (كود صالح 24 ساعة من لحظة التوليد)،
+    فقط بدون أي قيد على شركة المستخدم الحالي — لأن المستخدم هنا سوبريوزر
+    بالفعل ومسموح له يولّد كودًا لأي شركة يحددها بمعرّفها.
+    ملحوظة: المنطق الأصلي لا يدعم تخصيص عدد ساعات/أيام انتهاء الكود
+    (مهيّأ بثبات على 24 ساعة)، فالتزمنا بنفس السلوك دون اختراع باراميتر
+    "days" غير موجود فعليًا في الكود الأصلي.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(tags=["SuperAdmin"], summary="Generate subscription code for any company")
+    def post(self, request):
+        self._assert_superuser(request)
+        serializer = GenerateSubscriptionCodeSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        company = Company.objects.get(id=serializer.validated_data["company_id"])
+        now = timezone.now()
+        expires_at = now + timedelta(hours=24)
+
+        code = CompanySubscriptionCode.generate_code()
+        while CompanySubscriptionCode.objects.filter(code=code).exists():
+            code = CompanySubscriptionCode.generate_code()
+
+        payment_code = CompanySubscriptionCode.objects.create(
+            company=company,
+            code=code,
+            created_by=request.user,
+            expires_at=expires_at,
+        )
+
+        return Response(
+            SuperadminSubscriptionCodeSerializer(payment_code).data,
+            status=status.HTTP_201_CREATED,
+        )
+
+
+# ──────────────────────────────────────────────
+# Backups Management (Cross-Company)
+# ──────────────────────────────────────────────
+
+class SuperadminBackupSerializer(drf_serializers.ModelSerializer):
+    """عرض نسخة احتياطية مع اسم الشركة ورابط تنزيل عابر للشركات."""
+
+    company_name = drf_serializers.CharField(source="company.name", read_only=True)
+    download_url = drf_serializers.SerializerMethodField()
+
+    class Meta:
+        model = CompanyBackup
+        fields = (
+            "id",
+            "company",
+            "company_name",
+            "backup_type",
+            "status",
+            "row_count",
+            "created_at",
+            "download_url",
+        )
+
+    def get_download_url(self, obj):
+        request = self.context.get("request")
+        if not request:
+            return ""
+        return request.build_absolute_uri(
+            reverse("superadmin-backup-download", kwargs={"pk": obj.id})
+        )
+
+
+class SuperadminBackupListView(SuperuserOnly, APIView):
+    """
+    GET /api/v1/superadmin/backups/
+    Query params: company, search
+    كل النسخ الاحتياطية من كل الشركات.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(tags=["SuperAdmin"], summary="List backups across companies")
+    def get(self, request):
+        self._assert_superuser(request)
+        qs = CompanyBackup.objects.select_related("company").order_by("-created_at")
+
+        company_id = request.query_params.get("company")
+        search = request.query_params.get("search")
+
+        if company_id:
+            qs = qs.filter(company_id=company_id)
+        if search:
+            qs = qs.filter(
+                Q(company__name__icontains=search) | Q(backup_type__icontains=search)
+            )
+
+        serializer = SuperadminBackupSerializer(qs, many=True, context={"request": request})
+        return Response(serializer.data)
+
+
+class SuperadminBackupDownloadView(SuperuserOnly, APIView):
+    """
+    GET /api/v1/superadmin/backups/<id>/download/
+
+    نفس منطق core/api_views/backups.py:BackupDownloadView الموجود فعليًا،
+    فقط بدون قيد company (السوبريوزر يقدر ينزّل نسخة أي شركة).
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(tags=["SuperAdmin"], summary="Download any company's backup file")
+    def get(self, request, pk):
+        self._assert_superuser(request)
+        backup = CompanyBackup.objects.filter(id=pk).select_related("company").first()
+        if not backup:
+            raise Http404("Backup not found")
+
+        file_path = Path(backup.file_path)
+        if not file_path.exists():
+            raise Http404("Backup file missing")
+
+        response = FileResponse(file_path.open("rb"), content_type="application/json")
+        response["Content-Disposition"] = f'attachment; filename="{file_path.name}"'
+        return response
+
+
+class SuperadminBackupRestoreView(SuperuserOnly, APIView):
+    """
+    POST /api/v1/superadmin/backups/<id>/restore/
+
+    يستدعي نفس دالة restore_company_backup الموجودة فعليًا في
+    core/services/company_backups.py دون إعادة كتابتها، بدون قيد company.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(tags=["SuperAdmin"], summary="Restore any company's backup")
+    def post(self, request, pk):
+        self._assert_superuser(request)
+        backup = CompanyBackup.objects.filter(id=pk).select_related("company").first()
+        if not backup:
+            raise Http404("Backup not found")
+
+        restore_company_backup(backup=backup)
+        return Response(
+            {
+                "detail": f"Backup restored successfully for company '{backup.company.name}'.",
+                "company_id": backup.company_id,
+                "backup_id": backup.id,
+            },
+            status=status.HTTP_200_OK,
+        )
 
 
 # ──────────────────────────────────────────────

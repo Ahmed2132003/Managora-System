@@ -42,6 +42,49 @@ export const endpoints = {
     download: (id: number) => api(`/backups/${id}/download/`),
     restore: (id: number) => api(`/backups/${id}/restore/`),
   },
+
+  // ── SuperAdmin Panel (superuser-only) ─────────────────────────────────────
+  // كل الـ endpoints دي تتطلب is_superuser === true
+  superadmin: {
+    // System Stats
+    stats: api("/superadmin/stats/"),
+
+    // Audit Logs (cross-company)
+    auditLogs: api("/superadmin/audit-logs/"),
+
+    // Companies CRUD
+    companies: api("/superadmin/companies/"),
+    company: (id: number) => api(`/superadmin/companies/${id}/`),
+    companyToggleActive: (id: number) =>
+      api(`/superadmin/companies/${id}/toggle-active/`),
+    companyExtendSubscription: (id: number) =>
+      api(`/superadmin/companies/${id}/extend-subscription/`),
+
+    // Users CRUD (cross-company)
+    users: api("/superadmin/users/"),
+    user: (id: number) => api(`/superadmin/users/${id}/`),
+    userResetPassword: (id: number) =>
+      api(`/superadmin/users/${id}/reset-password/`),
+    userAssignRole: (id: number) =>
+      api(`/superadmin/users/${id}/assign-role/`),
+
+    // Roles & Permissions (cross-company)
+    roles: api("/superadmin/roles/"),
+    role: (id: number) => api(`/superadmin/roles/${id}/`),
+    permissions: api("/superadmin/permissions/"),
+
+    // Subscription Codes (cross-company)
+    subscriptionCodes: api("/superadmin/subscription-codes/"),
+    subscriptionCodesGenerate: api("/superadmin/subscription-codes/generate/"),
+
+    // Backups (cross-company)
+    backups: api("/superadmin/backups/"),
+    backupDownload: (id: number) =>
+      api(`/superadmin/backups/${id}/download/`),
+    backupRestore: (id: number) =>
+      api(`/superadmin/backups/${id}/restore/`),
+  },
+
   hr: {
     departments: api("/departments/"),
     department: (id: number) => api(`/departments/${id}/`),
@@ -81,8 +124,8 @@ export const endpoints = {
     attendanceManualCreate: api("/attendance/manual/"),
     attendanceCodeGenerate: api("/attendance/code/"),
     attendanceCodeSubmit: api("/attendance/code/submit/"),
-    attendanceEmailConfig: api("/attendance/email-config/"),    
-    attendancePendingApprovals: api("/attendance/pending/"),    
+    attendanceEmailConfig: api("/attendance/email-config/"),
+    attendancePendingApprovals: api("/attendance/pending/"),
     attendanceApproveReject: (recordId: number, action: "approve" | "reject") =>
       api(`/attendance/${recordId}/${action}/`),
 
@@ -109,7 +152,7 @@ export const endpoints = {
     payrollPeriodLock: (id: number) => api(`/payroll/periods/${id}/lock/`),
     payrollRun: (id: number) => api(`/payroll/runs/${id}/`),
     payrollRunsMy: api("/payroll/runs/my/"),
-    payrollRunMarkPaid: (id: number) => api(`/payroll/runs/${id}/mark-paid/`),    
+    payrollRunMarkPaid: (id: number) => api(`/payroll/runs/${id}/mark-paid/`),
     payrollRunPayslipPng: (id: number) => api(`/payroll/runs/${id}/payslip.png`),
     payrollRunPayslipPdf: (id: number) => api(`/payroll/runs/${id}/payslip.pdf`),
   },
@@ -137,7 +180,6 @@ export const endpoints = {
   invoices: api("/invoices/"),
   invoice: (id: number) => api(`/invoices/${id}/`),
   invoiceIssue: (id: number) => api(`/invoices/${id}/issue/`),
-
 
   catalogItems: api("/catalog-items/"),
   catalogItem: (id: number) => api(`/catalog-items/${id}/`),
@@ -172,7 +214,8 @@ export const endpoints = {
 
   messaging: {
     conversations: api("/chat/conversations/"),
-    conversationMessages: (conversationId: number) => api(`/chat/conversations/${conversationId}/messages/`),
+    conversationMessages: (conversationId: number) =>
+      api(`/chat/conversations/${conversationId}/messages/`),
     sendMessage: api("/chat/messages/send/"),
     groups: api("/chat/groups/"),
     group: (groupId: number) => api(`/chat/groups/${groupId}/`),

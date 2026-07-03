@@ -1,0 +1,68 @@
+/*
+ * superadmin.css
+ * إضافات صغيرة فوق DashboardPage.css فقط — لا يوجد أي إعادة تعريف للـ layout.
+ * كل صفحات /superadmin تستورد هذا الملف بجانب DashboardPage.css.
+ */
+
+/* حالات الشارات الإضافية (status-pill الأساسي أزرق فقط) */
+.status-pill--success {
+  background: rgba(16, 185, 129, 0.15);
+  color: #10b981;
+}
+
+.status-pill--danger {
+  background: rgba(239, 68, 68, 0.15);
+  color: #ef4444;
+}
+
+.status-pill--warning {
+  background: rgba(245, 158, 11, 0.15);
+  color: #f59e0b;
+}
+
+.status-pill--neutral {
+  background: rgba(140, 147, 178, 0.18);
+  color: var(--muted);
+}
+
+/* checkbox داخل الفورم (نفس نمط DepartmentsPage.css) */
+.checkbox-field {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--text);
+  font-size: 0.9rem;
+}
+
+.checkbox-field input {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--primary);
+}
+
+/* أزرار أسفل المودال */
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+/* عمود اسم + وصف فرعي داخل خلية جدول (مثل اسم الشركة + slug) */
+.row-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.row-meta__sub {
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+
+@media (max-width: 720px) {
+  .modal-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}

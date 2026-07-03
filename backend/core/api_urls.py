@@ -1,4 +1,3 @@
-
 from django.urls import include, path
 from rest_framework.routers import DefaultRouter
 from rest_framework_simplejwt.views import TokenRefreshView
@@ -38,10 +37,18 @@ from core.api_views.users import UsersViewSet
 # ── SuperAdmin views ──────────────────────────────────────────────────────────
 from core.api_views.superadmin import (
     SuperadminAuditLogView,
+    SuperadminBackupDownloadView,
+    SuperadminBackupListView,
+    SuperadminBackupRestoreView,
     SuperadminCompanyDetailView,
     SuperadminCompanyExtendSubscriptionView,
     SuperadminCompanyListCreateView,
     SuperadminCompanyToggleActiveView,
+    SuperadminGenerateSubscriptionCodeView,
+    SuperadminPermissionListView,
+    SuperadminRoleDetailView,
+    SuperadminRoleListCreateView,
+    SuperadminSubscriptionCodeListView,
     SuperadminSystemStatsView,
     SuperadminUserAssignRoleView,
     SuperadminUserDetailView,
@@ -106,4 +113,15 @@ urlpatterns = [
     path("superadmin/users/<int:pk>/",                  SuperadminUserDetailView.as_view(),               name="superadmin-user-detail"),
     path("superadmin/users/<int:pk>/reset-password/",   SuperadminUserResetPasswordView.as_view(),        name="superadmin-user-reset-password"),
     path("superadmin/users/<int:pk>/assign-role/",      SuperadminUserAssignRoleView.as_view(),           name="superadmin-user-assign-role"),
+    # Roles & Permissions CRUD (cross-company)
+    path("superadmin/roles/",                           SuperadminRoleListCreateView.as_view(),           name="superadmin-roles"),
+    path("superadmin/roles/<int:pk>/",                  SuperadminRoleDetailView.as_view(),               name="superadmin-role-detail"),
+    path("superadmin/permissions/",                     SuperadminPermissionListView.as_view(),           name="superadmin-permissions"),
+    # Subscription Codes (cross-company)
+    path("superadmin/subscription-codes/",              SuperadminSubscriptionCodeListView.as_view(),     name="superadmin-subscription-codes"),
+    path("superadmin/subscription-codes/generate/",     SuperadminGenerateSubscriptionCodeView.as_view(), name="superadmin-subscription-codes-generate"),
+    # Backups (cross-company)
+    path("superadmin/backups/",                         SuperadminBackupListView.as_view(),               name="superadmin-backups"),
+    path("superadmin/backups/<int:pk>/download/",       SuperadminBackupDownloadView.as_view(),           name="superadmin-backup-download"),
+    path("superadmin/backups/<int:pk>/restore/",        SuperadminBackupRestoreView.as_view(),            name="superadmin-backup-restore"),
 ]

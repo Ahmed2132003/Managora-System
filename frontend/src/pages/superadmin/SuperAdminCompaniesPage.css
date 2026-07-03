@@ -1,0 +1,78 @@
+@import "../DashboardPage.css";
+
+.sa-companies-page {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.sa-page-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.sa-page-title {
+  font-size: 1.5rem;
+  font-weight: 700;
+  margin: 0 0 4px;
+}
+
+.sa-page-subtitle {
+  color: var(--muted);
+  margin: 0;
+  font-size: 0.9rem;
+}
+
+.sa-filters-bar {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.sa-input,
+.sa-select {
+  padding: 10px 14px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: var(--bg-alt);
+  color: var(--text);
+  font-size: 0.9rem;
+  min-width: 200px;
+}
+
+.sa-input:focus,
+.sa-select:focus {
+  outline: none;
+  border-color: var(--primary);
+}
+
+.sa-company-name {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.sa-company-slug {
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+
+.sa-form-error {
+  color: #ff5555;
+  font-size: 0.85rem;
+  margin: 0;
+}
+
+@media (max-width: 720px) {
+  .sa-filters-bar {
+    flex-direction: column;
+  }
+
+  .sa-input,
+  .sa-select {
+    width: 100%;
+  }
+}
